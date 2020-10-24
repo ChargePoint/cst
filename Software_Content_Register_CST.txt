@@ -1,0 +1,19 @@
+--------------------------------------------
+NXP Software Content Register
+
+Package:                   cst-3.3.1.tgz
+Outgoing License:          BSD-3-Clause
+License Files:             ./LICENSE.bsd3
+                           ./LICENSE.openssl (OpenSSL License and SSLeay License)
+                           ./code/back_end-hsm/LICENSE.oasis (Cryptoki)
+                           ./code/back_end-hsm/LICENSE.rsa (Cryptoki)
+                           ./LICENSE.hidapi
+Type of content:           Source code and binaries
+Description and comments:  Code Signing Tool - used for signing images for IMX platforms
+Release Location:          www.nxp.com
+Origin:                    NXP (BSD-3)
+                           Hidapi - https://github.com/signal11/hidapi
+                           OpenSSL - https://github.com/openssl
+                           RSA Security Inc. PKCS #11 Cryptographic Token Interface (Cryptoki) - https://github.com/oasis-tcs/pkcs11/tree/master/working/3-00-wd-01
+
+--------------------------------------------
