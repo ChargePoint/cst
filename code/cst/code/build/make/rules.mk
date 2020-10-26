@@ -14,7 +14,7 @@
 #==============================================================================
 
 # Consolidate all compiler and linker options
-CFLAGS  := $(EXTRACFLAGS) $(CINCLUDES) $(COPTIONS) $(CDEFINES)
+CFLAGS  := $(EXTRACFLAGS) $(CINCLUDES) $(COPTIONS) $(CDEFINES) -Wno-unused-variable
 LDFLAGS := $(EXTRALDFLAGS) $(LDOPTIONS) $(LDLIBPATH) $(LDLIBS)
 YFLAGS  := -d
 LFLAGS  := -t
