@@ -92,6 +92,7 @@ usage()
 max_param=16
 min_param=12
 num_param=1
+openssl_engine="-engine cloudhsm"
 
 if [ $interactive = "n" ]
 then
@@ -331,6 +332,10 @@ fi
 touch index.txt
 echo "unique_subject = no" > index.txt.attr
 
+# Add debugging
+set -x
+set -e
+set -o
 
 if [ $existing_ca = "n" ]
 then
@@ -360,7 +365,7 @@ then
         ca_key_type=ec:${eck}
     fi
 
-    openssl req -newkey ${ca_key_type} -passout file:./key_pass.txt \
+    openssl req ${openssl_engine} -newkey ${ca_key_type} -passout file:./key_pass.txt \
                    -subj ${ca_subj_req} \
                    -x509 -extensions v3_ca \
                    -keyout temp_ca.pem \
@@ -368,12 +373,12 @@ then
                    -days ${val_period} -config ../ca/openssl.cnf
 
     # Generate CA key in PKCS #8 format - both PEM and DER
-    openssl pkcs8 -passin file:./key_pass.txt -passout file:./key_pass.txt \
+    openssl pkcs8 ${openssl_engine} -passin file:./key_pass.txt -passout file:./key_pass.txt \
                   -topk8 -inform PEM -outform DER -v2 des3 \
                   -in temp_ca.pem \
                   -out ${ca_key}.der
 
-    openssl pkcs8 -passin file:./key_pass.txt -passout file:./key_pass.txt \
+    openssl pkcs8 ${openssl_engine} -passin file:./key_pass.txt -passout file:./key_pass.txt \
                   -topk8 -inform PEM -outform PEM -v2 des3 \
                   -in temp_ca.pem \
                   -out ${ca_key}.pem
@@ -402,7 +407,7 @@ then
         if [ $use_ecc = 'n' ]
         then
             # Generate SRK key
-            openssl genrsa -des3 -passout file:./key_pass.txt -f4 \
+            openssl genrsa ${openssl_engine} -des3 -passout file:./key_pass.txt -f4 \
                            -out ./temp_srk.pem ${kl}
 
             srk_subj_req=/CN=SRK${i}_sha256_${kl}_65537_v3_usr/
@@ -421,13 +426,13 @@ then
         fi
 
         # Generate SRK certificate signing request
-        openssl req -new -batch -passin file:./key_pass.txt \
+        openssl req ${openssl_engine} -new -batch -passin file:./key_pass.txt \
                     -subj ${srk_subj_req} \
                     -key ./temp_srk.pem \
                     -out ./temp_srk_req.pem
 
         # Generate SRK certificate (this is a CA cert)
-           openssl ca -batch -passin file:./key_pass.txt \
+           openssl ca ${openssl_engine} -batch -passin file:./key_pass.txt \
                       -md sha256 -outdir ./ \
                       -in ./temp_srk_req.pem \
                       -cert ${ca_cert}.pem \
@@ -438,18 +443,18 @@ then
                       -config ../ca/openssl.cnf
 
         # Convert SRK Certificate to DER format
-        openssl x509 -inform PEM -outform DER \
+        openssl x509 ${openssl_engine} -inform PEM -outform DER \
                      -in ${srk_crt}.pem \
                      -out ${srk_crt}.der
 
         # Generate SRK key in PKCS #8 format - both PEM and DER
-        openssl pkcs8 -passin file:./key_pass.txt \
+        openssl pkcs8 ${openssl_engine} -passin file:./key_pass.txt \
                       -passout file:./key_pass.txt \
                       -topk8 -inform PEM -outform DER -v2 des3 \
                       -in temp_srk.pem \
                       -out ${srk_key}.der
 
-        openssl pkcs8 -passin file:./key_pass.txt \
+        openssl pkcs8 ${openssl_engine} -passin file:./key_pass.txt \
                       -passout file:./key_pass.txt \
                       -topk8 -inform PEM -outform PEM -v2 des3 \
                       -in temp_srk.pem \
@@ -476,7 +481,7 @@ do
     if [ $use_ecc = 'n' ]
         then
             # Generate SRK key
-            openssl genrsa -des3 -passout file:./key_pass.txt -f4 \
+            openssl genrsa ${openssl_engine} -des3 -passout file:./key_pass.txt -f4 \
                            -out ./temp_srk.pem ${kl}
 
             srk_subj_req=/CN=SRK${i}_sha256_${kl}_65537_v3_ca/
@@ -494,13 +499,13 @@ do
             srk_key=./SRK${i}_sha256_${cn}_v3_ca_key
     fi
     # Generate SRK certificate signing request
-       openssl req -new -batch -passin file:./key_pass.txt \
+       openssl req ${openssl_engine} -new -batch -passin file:./key_pass.txt \
                    -subj ${srk_subj_req} \
                    -key ./temp_srk.pem \
                    -out ./temp_srk_req.pem
 
     # Generate SRK certificate (this is a CA cert)
-       openssl ca -batch -passin file:./key_pass.txt \
+       openssl ca ${openssl_engine} -batch -passin file:./key_pass.txt \
                   -md sha256 -outdir ./ \
                   -in ./temp_srk_req.pem \
                   -cert ${ca_cert}.pem \
@@ -511,18 +516,18 @@ do
                   -config ../ca/openssl.cnf
 
     # Convert SRK Certificate to DER format
-    openssl x509 -inform PEM -outform DER \
+    openssl x509 ${openssl_engine} -inform PEM -outform DER \
                  -in ${srk_crt}.pem \
                  -out ${srk_crt}.der
 
     # Generate SRK key in PKCS #8 format - both PEM and DER
-    openssl pkcs8 -passin file:./key_pass.txt \
+    openssl pkcs8 ${openssl_engine} -passin file:./key_pass.txt \
                   -passout file:./key_pass.txt \
                   -topk8 -inform PEM -outform DER -v2 des3 \
                   -in temp_srk.pem \
                   -out ${srk_key}.der
 
-    openssl pkcs8 -passin file:./key_pass.txt \
+    openssl pkcs8 ${openssl_engine} -passin file:./key_pass.txt \
                   -passout file:./key_pass.txt \
                   -topk8 -inform PEM -outform PEM -v2 des3 \
                   -in temp_srk.pem \
@@ -542,7 +547,7 @@ do
             srk_crt_i=../crts/SRK${i}_sha256_${kl}_65537_v3_ca_crt.pem
             srk_key_i=./SRK${i}_sha256_${kl}_65537_v3_ca_key.pem
             # Generate key
-            openssl genrsa -des3 -passout file:./key_pass.txt -f4 \
+            openssl genrsa ${openssl_engine} -des3 -passout file:./key_pass.txt -f4 \
                            -out ./temp_csf.pem ${kl}
 
             csf_subj_req=/CN=CSF${i}_1_sha256_${kl}_65537_v3_usr/
@@ -563,13 +568,13 @@ do
     fi
 
     # Generate CSF certificate signing request
-    openssl req -new -batch -passin file:./key_pass.txt \
+    openssl req ${openssl_engine} -new -batch -passin file:./key_pass.txt \
                 -subj ${csf_subj_req} \
                 -key ./temp_csf.pem \
                 -out ./temp_csf_req.pem
 
     # Generate CSF certificate (this is a user cert)
-    openssl ca -batch -md sha256 -outdir ./ \
+    openssl ca ${openssl_engine} -batch -md sha256 -outdir ./ \
                -passin file:./key_pass.txt \
                -in ./temp_csf_req.pem \
                -cert ${srk_crt_i} \
@@ -580,17 +585,17 @@ do
                -config ../ca/openssl.cnf
 
     # Convert CSF Certificate to DER format
-    openssl x509 -inform PEM -outform DER \
+    openssl x509 ${openssl_engine} -inform PEM -outform DER \
                  -in ${csf_crt}.pem \
                  -out ${csf_crt}.der
 
     # Generate CSF key in PKCS #8 format - both PEM and DER
-    openssl pkcs8 -passin file:./key_pass.txt -passout file:./key_pass.txt \
+    openssl pkcs8 ${openssl_engine} -passin file:./key_pass.txt -passout file:./key_pass.txt \
                   -topk8 -inform PEM -outform DER -v2 des3 \
                   -in temp_csf.pem \
                   -out ${csf_key}.der
 
-    openssl pkcs8 -passin file:./key_pass.txt -passout file:./key_pass.txt \
+    openssl pkcs8 ${openssl_engine} -passin file:./key_pass.txt -passout file:./key_pass.txt \
                   -topk8 -inform PEM -outform PEM -v2 des3 \
                   -in temp_csf.pem \
                   -out ${csf_key}.pem
@@ -607,7 +612,7 @@ do
     if [ $use_ecc = 'n' ]
         then
             # Generate key
-            openssl genrsa -des3 -passout file:./key_pass.txt -f4 \
+            openssl genrsa ${openssl_engine} -des3 -passout file:./key_pass.txt -f4 \
                            -out ./temp_img.pem ${kl}
 
             img_subj_req=/CN=IMG${i}_1_sha256_${kl}_65537_v3_usr/
@@ -626,12 +631,12 @@ do
     fi
 
     # Generate IMG certificate signing request
-    openssl req -new -batch -passin file:./key_pass.txt \
+    openssl req ${openssl_engine} -new -batch -passin file:./key_pass.txt \
                 -subj ${img_subj_req} \
                 -key ./temp_img.pem \
                 -out ./temp_img_req.pem
 
-    openssl ca -batch -md sha256 -outdir ./ \
+    openssl ca ${openssl_engine} -batch -md sha256 -outdir ./ \
                -passin file:./key_pass.txt \
                -in ./temp_img_req.pem \
                -cert ${srk_crt_i} \
@@ -642,17 +647,17 @@ do
                -config ../ca/openssl.cnf
 
     # Convert IMG Certificate to DER format
-    openssl x509 -inform PEM -outform DER \
+    openssl x509 ${openssl_engine} -inform PEM -outform DER \
                  -in ${img_crt}.pem \
                  -out ${img_crt}.der
 
     # Generate IMG key in PKCS #8 format - both PEM and DER
-    openssl pkcs8 -passin file:./key_pass.txt -passout file:./key_pass.txt \
+    openssl pkcs8 ${openssl_engine} -passin file:./key_pass.txt -passout file:./key_pass.txt \
                   -topk8 -inform PEM -outform DER -v2 des3 \
                   -in temp_img.pem \
                   -out ${img_key}.der
 
-    openssl pkcs8 -passin file:./key_pass.txt -passout file:./key_pass.txt \
+    openssl pkcs8 ${openssl_engine} -passin file:./key_pass.txt -passout file:./key_pass.txt \
                   -topk8 -inform PEM -outform PEM -v2 des3 \
                   -in temp_img.pem \
                   -out ${img_key}.pem
