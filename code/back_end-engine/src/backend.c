@@ -300,19 +300,6 @@ static int32_t ctx_init(ENGINE_CTX *ctx);
  */
 static int32_t ctx_finish(ENGINE_CTX *ctx);
 
-/**  ENGINE_load_certificate
- *
- * Read certificate with a given reference from engine.
- *
- * @param[in] engine input file
- *
- * @param[in] cert_ref certificate reference
- *
- * @pre @a engine, @a cert_ref must not be NULL.
- *
- * @returns pointer to X.509 certificate if successful, NULL otherwise.
- */
-static X509* ENGINE_load_certificate (ENGINE * engine, const char *cert_ref);
 
 /*=======================================================================+
  LOCAL FUNCTION IMPLEMENTATIONS
@@ -361,7 +348,7 @@ static int32_t ctx_init(ENGINE_CTX *ctx)
 
     ENGINE_load_builtin_engines();
 
-    ctx->engine = ENGINE_by_id("pkcs11");
+    ctx->engine = ENGINE_by_id("cloudhsm");
 
     if(ctx->engine == NULL)
         return 0;
@@ -388,25 +375,115 @@ static int32_t ctx_finish(ENGINE_CTX *ctx)
     return 1;
 }
 
-/*--------------------------
- ENGINE_load_certificate
- ---------------------------*/
-X509 *ENGINE_load_certificate (ENGINE * e, const char *cert_ref)
+/**
+ * rsa_pem_get_x509() - read a certficate from file
+ *
+ * @keydir:	Directory containins the key
+ * @name	Name of key file
+ * @rsap	Returns RSA object, or NULL on failure
+ * @return X509 pointer if ok, NULL on error
+ */
+X509 *read_certificate_pem(const char *keyid)
 {
-    struct {
-        const char *s_slot_cert_id;
-        X509 *cert;
-    } params = {0};
+    X509 *cert;
+    FILE *f;
+    char path[1024];
+    const char *keydir;
 
-    params.s_slot_cert_id = cert_ref;
-    params.cert = NULL;
-    if (!ENGINE_ctrl_cmd (e, "LOAD_CERT_CTRL", 0, &params, NULL, 1)) {
-        ERR_print_errors_fp (stderr);
-        return NULL;
+    if (keyid == NULL) {
+        fprintf(stderr, "keyid is null");
+        goto out;
     }
 
-  return params.cert;
+    keydir = getenv("KEY_DIR");
+    if (keydir == NULL) {
+        fprintf(stderr, "environment variable KEY_DIR not set");
+		goto out;
+    }
+	snprintf(path, sizeof(path), "%s/crts/%s_crt.pem", keydir, keyid);
+
+    cert = NULL;
+    if (path == NULL) {
+        fprintf(stderr, "Path is null");
+        goto out;
+    }
+    f = fopen(path, "r");
+    if (!f) {
+        fprintf(stderr, "Couldn't open RSA certificate: '%s': %s\n",
+            path, strerror(errno));
+        goto out;
+    }
+
+    /* Read the certificate */
+    if (!PEM_read_X509(f, &cert, NULL, NULL)) {
+        fprintf(stderr, "Couldn't read certificate");
+        goto out_file;
+    }
+
+out_file:
+    fclose(f);
+out:
+    return cert;
 }
+
+EVP_PKEY *read_private_key_pem(const char* keyid)
+{
+    int r;
+    EVP_PKEY *pkey;
+    EVP_PKEY *pkey_ret;
+    RSA *rsa;
+    FILE *f;
+    char path[1024];
+    const char *keydir;
+
+    rsa = NULL;
+    pkey = NULL;
+    pkey_ret = NULL;
+
+    if (keyid == NULL) {
+        fprintf(stderr, "keyid is null");
+        goto out;
+    }
+
+    keydir = getenv("KEY_DIR");
+    if (keydir == NULL) {
+        fprintf(stderr, "environment variable KEY_DIR not set");
+        goto out;
+    }
+    snprintf(path, sizeof(path), "%s/keys/%s_key.pem", keydir, keyid);
+
+    f = fopen(path, "r");
+    if (!f) {
+        fprintf(stderr, "Couldn't open RSA private key: '%s': %s\n",
+            path, strerror(errno));
+        goto out;
+    }
+
+    rsa = PEM_read_RSAPrivateKey(f, 0, NULL, path);
+    if (!rsa) {
+        fprintf(stderr, "Failure reading private key");
+        goto out_file;
+    }
+
+    pkey = EVP_PKEY_new();
+    if (pkey == NULL) {
+        fprintf(stderr, "ENV_PKEY_NEW failed");
+        goto out_file;
+    }
+    r = EVP_PKEY_assign_RSA(pkey, rsa);
+    if (r != 1) {
+        fprintf(stderr, "EVP_PKEY_assign_RSA failed");
+        goto out_file;
+    }
+
+    pkey_ret = pkey;
+
+out_file:
+    fclose(f);
+out:
+	return pkey_ret;
+}
+
 
 /*--------------------------
  get_NID
@@ -872,7 +949,7 @@ encrypt_dek_key (uint8_t * key, size_t key_bytes,
 
     do {
       /* Read the certificate from cert_file */
-      cert = read_certificate (cert_file);
+      cert = read_certificate_pem (cert_file);
         if (!cert) {
             snprintf (err_str, MAX_ERR_STR_BYTES - 1,
                   "Cannot open certificate file %s", cert_file);
@@ -1193,7 +1270,7 @@ int32_t get_der_encoded_certificate_data(const char* ref,
     }
 
     /* Read X509 certificate data */
-    cert = ENGINE_load_certificate (ctx->engine, ref);
+    cert = read_certificate_pem(ref);
     if (!cert)
     {
        ctx_finish(ctx);
@@ -1263,7 +1340,7 @@ gen_sig_data (const char *in_file, const char *cert_ref,
         goto out;
     }
 
-    cert = ENGINE_load_certificate (ctx->engine, cert_ref);
+    cert = read_certificate_pem (cert_ref);
     if (!cert)
     {
         error = CAL_CRYPTO_API_ERROR;
@@ -1272,7 +1349,7 @@ gen_sig_data (const char *in_file, const char *cert_ref,
 #ifdef DEBUG
     X509_print_fp(stdout, cert);
 #endif
-    key = ENGINE_load_private_key(ctx->engine, cert_ref, 0, 0);
+    key = read_private_key_pem(cert_ref);
 
     if (key == NULL) {
         error = CAL_CRYPTO_API_ERROR;
