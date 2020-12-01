@@ -383,24 +383,25 @@ static int32_t ctx_finish(ENGINE_CTX *ctx)
  * @rsap	Returns RSA object, or NULL on failure
  * @return X509 pointer if ok, NULL on error
  */
-X509 *read_certificate_pem(const char *keyid)
+X509 *read_certificate_pem(const char *cert_path)
 {
     X509 *cert;
     FILE *f;
     char path[1024];
     const char *keydir;
 
-    if (keyid == NULL) {
-        fprintf(stderr, "keyid is null");
+    if (cert_path == NULL) {
+        fprintf(stderr, "cert_path is null");
         goto out;
     }
 
+    /* Generate Certificate path */
     keydir = getenv("KEY_DIR");
     if (keydir == NULL) {
         fprintf(stderr, "environment variable KEY_DIR not set");
 		goto out;
     }
-	snprintf(path, sizeof(path), "%s/crts/%s_crt.pem", keydir, keyid);
+	snprintf(path, sizeof(path), "%s/%s", keydir, cert_path);
 
     cert = NULL;
     if (path == NULL) {
@@ -426,31 +427,57 @@ out:
     return cert;
 }
 
-EVP_PKEY *read_private_key_pem(const char* keyid)
+EVP_PKEY *read_private_key_pem(const char* cert_path)
 {
     int r;
+    int index;
     EVP_PKEY *pkey;
     EVP_PKEY *pkey_ret;
     RSA *rsa;
     FILE *f;
     char path[1024];
+    char keyname[1024];
+    const char *tmpstr;
     const char *keydir;
 
     rsa = NULL;
     pkey = NULL;
     pkey_ret = NULL;
 
-    if (keyid == NULL) {
-        fprintf(stderr, "keyid is null");
+    if (cert_path == NULL) {
+        fprintf(stderr, "cert_path is null");
         goto out;
     }
 
+    /* Generate Private key path from cert
+     *
+     * Expected format of cert path:
+     *      crts/SRK1..._crt.pem
+     * This will be be converted to:
+     *      keys/SRK1..._key.pem
+     */
     keydir = getenv("KEY_DIR");
     if (keydir == NULL) {
         fprintf(stderr, "environment variable KEY_DIR not set");
         goto out;
     }
-    snprintf(path, sizeof(path), "%s/keys/%s_key.pem", keydir, keyid);
+    if (strlen(cert_path) < 13) {
+        fprintf(stderr, "invalid path %s. must be in format: crts/<...>_crt.pem",
+                cert_path);
+        goto out;
+    }
+    /* Copy cert path, removing first 5 chars (should be "crts/") */
+    tmpstr = &cert_path[5];
+    strcpy(keyname, tmpstr);
+    /* Add null character to remove last 8 characters (should be "_crt.pem") */
+    index = strlen(keyname) - 8;
+    if (index < 0) {
+        fprintf(stderr, "invalid path %s. must be in format: crts/<...>_crt.pem",
+                cert_path);
+        goto out;
+    }
+    keyname[index] = '\0';
+    snprintf(path, sizeof(path), "%s/keys/%s_key.pem", keydir, keyname);
 
     f = fopen(path, "r");
     if (!f) {
