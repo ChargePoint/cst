@@ -361,6 +361,13 @@ static int32_t ctx_init(ENGINE_CTX *ctx)
         ENGINE_free(ctx->engine);
         return 0;
     }
+
+    if (!ENGINE_set_default_RSA(ctx->engine)) {
+        fprintf(stderr, "Couldn't set engine as default for RSA\n");
+        ENGINE_free(ctx->engine);
+        return 0;
+    }
+
     return 1;
 }
 
