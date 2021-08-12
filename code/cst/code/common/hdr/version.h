@@ -11,7 +11,7 @@
 
               Freescale Semiconductor
         (c) Freescale Semiconductor, Inc. 2011-2015. All rights reserved.
-        Copyright 2018 NXP
+        Copyright 2018,2020 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -39,6 +39,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 =============================================================================
 @endverbatim */
 
-#define CST_VERSION "3.2.0"
+#define CST_VERSION "3.3.1"
 
 #endif /* __VERSION_H */

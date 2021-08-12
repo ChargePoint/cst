@@ -10,32 +10,8 @@
 @verbatim
 =============================================================================
 
-              Freescale Semiconductor
         (c) Freescale Semiconductor, Inc. 2011, 2012. All rights reserved.
-        Copyright 2018-2019 NXP
-
-Redistribution and use in source and binary forms, with or without modification,
-are permitted provided that the following conditions are met:
-
-1. Redistributions of source code must retain the above copyright notice, this
-   list of conditions and the following disclaimer.
-2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
-3. Neither the name of the copyright holder nor the names of its contributors
-   may be used to endorse or promote products derived from this software without
-   specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+        Copyright 2020 NXP
 
 =============================================================================
 @endverbatim */
@@ -52,8 +28,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                                  CONSTANTS
 =============================================================================*/
 
+#ifndef TRUE
 #define TRUE                      1 /**< Success val returned by functions */
+#endif
+#ifndef FALSE
 #define FALSE                     0 /**< Failure val returned by functions */
+#endif
 
 #define X509_UTCTIME_STRING_BYTES 13 /**< Expected length of validity period
                                        *   strings in X.509 certificates using
@@ -165,6 +145,20 @@ RSA_get0_key(const RSA *r, const BIGNUM **n, const BIGNUM **e, const BIGNUM **d)
 extern void
 openssl_initialize();
 
+/** Unix time
+ *
+ * Converts the validity time provided in X.509 certificates to Unix time
+ * required for WTLS certificates.
+ *
+ * @param[in] x509_time String with format: YYMMDDHHMMSSZ or YYYYMMDDHHMMSSZ
+ *
+ * @pre  Input X.509 certificate has validity period.
+ *
+ * @returns 32 bit time in UNIX format if successful, 0 otherwise
+ */
+extern uint32_t
+unix_time(const char *x509_time);
+
 /** Computes hash digest
  *
  * Calls openssl API to generate hash for the given data in buf.
@@ -234,6 +228,22 @@ get_bn(const BIGNUM *a, size_t *bytes);
 extern uint8_t*
 sign_data(const EVP_PKEY *skey, const BUF_MEM *bptr, hash_alg_t hash_alg,
           size_t *sig_bytes);
+
+/** write_cert_file
+ *
+ * Writes WTLS certificate data to a binary file
+ *
+ * @param[in] filename    filename of WTLS certificate file
+ *
+ * @param[in] data        WTLS certificate data
+ *
+ * @post if successful the contents of the WTLS certificate are written to
+ *       the output file.
+ *
+ * @returns if successful function returns #CST_SUCCESS otherwise #CST_FAILURE
+ */
+extern cst_status_t
+write_cert_file(const char *filename, const BIO *wtls_cert);
 
 /** read_certificate
  *

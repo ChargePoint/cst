@@ -189,6 +189,29 @@ int32_t gen_sig_data(const char* in_file,
                      size_t *sig_buf_bytes,
                      func_mode_t mode);
 
+/** get_der_encoded_certificate_data
+ *
+ * Read X.509 certificate data from given certificate reference and encode it
+ * to DER format and returns result in @derder.
+ *
+ * @param[in] filename    filename, function will work with both PEM and DER
+ *                        input certificate files.
+ *
+ * @param[out] der        address to write der data
+ *
+ * @post if successful the contents of the certificate are written at address
+ * @a der.
+ *
+ * @pre  #openssl_initialize has been called previously
+ *
+ * @post caller is responsible for releasing memory location returned in @a der
+ *
+ * @returns if successful function returns number of bytes written at address
+ * @a der, 0 otherwise.
+ */
+int32_t get_der_encoded_certificate_data(const char* reference,
+                                         uint8_t ** der);
+
 /** Generate authenticated encrypted data
  *
  * API generates authenticated encrypted data for given plain-text data file

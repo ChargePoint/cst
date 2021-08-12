@@ -63,6 +63,7 @@ echo    +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 echo.
 
 set scriptName=%0
+set scriptPath=%~dp0
 set numArgs=0
 for %%x in (%*) do set /A numArgs+=1
 
@@ -249,6 +250,38 @@ exit /B
 :: Check if SRKs should be generated as CA certs or user certs
 if %interactive%==y (
 	set /P srk_ca="Do you want the SRK certificates to have the CA flag set? (y/n)?: "
+)
+
+:BEFORE_GEN_KEYS
+:: Check existance of keys/, crts/ and ca/ directories of <cst> before generating keys and
+:: switch current working directory to <cst>/keys directory, if needed.
+set crt_dir=%cd%
+set keys_dir=%scriptPath%\\..\\keys\\
+set crts_dir=%scriptPath%\\..\\crts\\
+set ca_dir=%scriptPath%\\..\\ca\\
+
+if not exist "%keys_dir%" (
+    echo ERROR: Private keys directory %keys_dir% is missing. Expecting script to be located inside ^<cst^>/keys directory.
+    exit /B
+)
+
+if not exist "%crts_dir%" (
+    echo ERROR: Public keys directory %crts_dir% is missing. Expecting ^<cst^>/crts directory to be already created.
+    exit /B
+)
+
+if not exist "%ca_dir%" (
+    echo ERROR: Openssl configuration directory %ca_dir% is missing. Expecting ^<cst^>/ca directory to hold openssl configuration files.
+    exit /B
+)
+
+:: Switch current working directory to <cst>/keys directory, if needed.
+if not "%crt_dir%" == "%keys_dir%" (
+    cd "%keys_dir%" 
+    if %errorlevel% NEQ 0 (
+        echo ERROR: Cannot change directory to %keys_dir%
+        exit /B
+    )
 )
 
 :SERIAL
@@ -534,5 +567,16 @@ openssl pkcs8 -passin file:key_pass.txt -passout file:key_pass.txt ^
 del /F temp_sgk.pem temp_sgk_req.pem
 
 set /A i+=1
-if %i%==%max% exit /B
+if %i%==%max% goto DONE
 goto LOOP_SRK_SGK
+
+:DONE
+:: Switch back to initial working directory, if needed.
+if not "%crt_dir%" == "%keys_dir%" (
+    cd "%crt_dir%" 
+    if %errorlevel% NEQ 0 (
+        echo ERROR: Cannot change directory to %crt_dir%
+        exit /B
+    )
+)
+exit /B

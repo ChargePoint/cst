@@ -11,7 +11,7 @@
 
               Freescale Semiconductor
     (c) Freescale Semiconductor, Inc. 2011, 2012, 2013 All rights reserved.
-    Copyright 2018 NXP
+    Copyright 2018,2020 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -80,7 +80,7 @@ const char *g_tool_name = "SRKTOOL";   /**< Global holds tool name */
 #define CMDLINE_ARG_HASH_INDICATOR ('%')           /**< Generate cert hash */
 
 /** Valid short command line option letters. */
-const char* const short_options = "lvh:at:e:f:d:s:c:";
+const char* const short_options = "lvh:at:e:f:d:s:c:b";
 
 /** Valid long command line options. */
 const struct option long_options[] =
@@ -95,6 +95,7 @@ const struct option long_options[] =
     {"digest",  required_argument, 0, 'd'},
     {"sign_digest",  required_argument, 0, 's'},
     {"certs", required_argument, 0, 'c'},
+    {"verbose", no_argument, 0, 'b'},
     {NULL, 0, NULL, 0}
 };
 
@@ -460,6 +461,9 @@ uint8_t g_table_data[MAX_SRK_TABLE_BYTES];
 /** global index into g_table_data */
 uint32_t  g_index_to_table_data = SRK_TABLE_HEADER_BYTES;
 
+/** global variable for versbose output **/
+bool g_verbose = FALSE;
+
 /*===========================================================================
                                LOCAL FUNCTIONS
 =============================================================================*/
@@ -479,9 +483,7 @@ generate_xhab_srk_table(tgt_t target,
                         fuse_format_t fuse_file_format,
                         const char *sd_alg_str)
 {
-#ifdef DEBUG
     uint32_t i;                     /**< Loop index */
-#endif
     uint32_t srk_table_bytes = 0;     /**< Size of SRK table */
     size_t   hash_bytes = 0;        /**< Size of hash digest in bytes */
     uint8_t  *hash_data = NULL;     /**< Location of hash result buffer */
@@ -556,19 +558,28 @@ generate_xhab_srk_table(tgt_t target,
                               hash_data);
     }
 
-    /* Dump for verification */
-#ifdef DEBUG
+    /* Dump for verification or verbose output */
+    printf("Number of certificates    = %d\n", num_certs);
     printf("SRK table binary filename = %s\n", table_filename);
-    printf("Hash type                 = %s\n", md_alg_str);
-    printf("Fuse binary filename      = %s\n", fuses_filename);
-    printf("Hash keys at index ");
-    printf("Num_certs = %d\n", num_certs);
-    for (i = 0; i < num_certs; i++)
+    if (g_verbose)
     {
-        printf("Certificate %d            = %s\n", i, certs[i].filename);
-        printf("Certificate %d hash       = %d\n", i, certs[i].hash);
+        printf("Hash type                 = %s\n", md_alg_str);
+        puts("Hash keys at index ");
+        for (i = 0; i < num_certs; i++)
+        {
+            printf("Certificate %d            = %s\n", i, certs[i].filename);
+            printf("Certificate %d hash       = %d\n", i, certs[i].hash);
+        }
     }
-#endif
+    printf("SRK Fuse binary filename  = %s\n", fuses_filename);
+    puts("SRK Fuse binary dump:");
+    for (i = 0; i < hash_bytes; i+=4)
+    {
+        printf("SRK HASH[%d] = 0x%02X%02X%02X%02X\n", i/4, hash_data[i+3], hash_data[i+2], hash_data[i+1], hash_data[i]);
+    }
+
+    free(hash_data);
+
     return;
 }
 
@@ -620,7 +631,6 @@ write_srk_table_fuses(const char *fuses_filename,
             error(tmp_str);
         }
     }
-    free(hash_data);
     fclose(fp_fuses);
 }
 
@@ -1029,6 +1039,8 @@ void print_usage(void)
     printf("   -v, --version:\n");
     printf("      Optional, displays the version of the tool.  No ");
     printf("additional\n      arguments are required.\n\n");
+    printf("   -b, --verbose:\n");
+    printf("      Optional, displays a verbose output.\n\n");
     printf("Examples:\n");
     printf("---------\n\n");
     printf("1. To generate an SRK table and corresponding fuse pattern from ");
@@ -1086,6 +1098,8 @@ void print_usage(void)
     printf("   -v, --version:\n");
     printf("      Optional, displays the version of the tool.  No ");
     printf("additional\n      arguments are required.\n\n");
+    printf("   -b, --verbose:\n");
+    printf("      Optional, displays a verbose output.\n\n");
     printf("Examples:\n");
     printf("---------\n\n");
     printf("1. To generate an SRK table and corresponding fuse pattern from ");
@@ -1193,6 +1207,10 @@ int32_t main (int32_t argc, char *argv[])
                 exit(0);
                 break;
             case 'h':
+                /*
+                 * ******************DO NOT CHANGE***********************
+                 * NOTE: HAB version will always be 4.0 for HABv4 devices
+                 */
                 if (TGT_UNDEF == target)
                 {
                     target = TGT_HAB;
@@ -1205,6 +1223,10 @@ int32_t main (int32_t argc, char *argv[])
                 hab_version = check_hab_version(optarg);
                 break;
             case 'a':
+                /*
+                 * ******************DO NOT CHANGE**********************
+                 * NOTE: HAB version will always be 4.2 for AHAB devices
+                 */
                 if (TGT_UNDEF == target)
                 {
                     target = TGT_AHAB;
@@ -1232,6 +1254,9 @@ int32_t main (int32_t argc, char *argv[])
                 break;
             case 'c':
                 cert_filenames = optarg;
+                break;
+            case 'b':
+                g_verbose = TRUE;
                 break;
             /* Handle invalid options */
             case '?':

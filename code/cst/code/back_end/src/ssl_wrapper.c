@@ -10,7 +10,7 @@
 
               Freescale Semiconductor
         (c) Freescale Semiconductor, Inc. 2011-2015. All rights reserved.
-        Copyright 2018-2019 NXP
+        Copyright 2018-2020 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -73,7 +73,7 @@ int32_t encryptccm(unsigned char *plaintext, int plaintext_len, unsigned char *a
     EVP_CIPHER_CTX *ctx;
 
     int len;
-    int ciphertext_len;
+    size_t ciphertext_len;
 
     unsigned char *ciphertext = NULL;
     ciphertext = (unsigned char *)malloc(plaintext_len + EVP_MAX_BLOCK_LENGTH);
@@ -202,7 +202,8 @@ int32_t encryptcbc(unsigned char *plaintext, int plaintext_len, unsigned char *k
     return CAL_NO_CRYPTO_API_ERROR;
 #else
     EVP_CIPHER_CTX *ctx;
-    int len, ciphertext_len;
+    int len;
+    size_t ciphertext_len;
     unsigned char *ciphertext = NULL;
     ciphertext = (unsigned char *)malloc(plaintext_len);
     if (NULL == ciphertext) {

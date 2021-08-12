@@ -254,30 +254,6 @@ sign_data(const EVP_PKEY *skey, const BUF_MEM *bptr, hash_alg_t hash_alg,
 extern X509*
 read_certificate(const char* filename);
 
-/** get_der_encoded_certificate_data
- *
- * Read X.509 certificate data from given certificate file and calls openssl
- * to encode X509 to DER format and returns DER formatted data located at
- * @derder.
- *
- * @param[in] filename    filename, function will work with both PEM and DER
- *                        input certificate files.
- *
- * @param[out] der        address to write der data
- *
- * @post if successful the contents of the certificate are written at address
- * @a der.
- *
- * @pre  #openssl_initialize has been called previously
- *
- * @post caller is responsible for releasing memory location returned in @a der
- *
- * @returns if successful function returns number of bytes written at address
- * @a der, 0 otherwise.
- */
-extern int32_t get_der_encoded_certificate_data(const char* filename,
-                                           uint8_t ** der);
-
 /** read_private_key
  *
  * Uses openssl API to read private key from given certificate file

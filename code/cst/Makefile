@@ -55,7 +55,7 @@ $(DST)%:
 	$(MKDIR) $@
 
 # release binaries for the given configuration
-rel_bin: $(DST)/$(OSTYPE)/lib $(DST)/$(OSTYPE)/bin $(DST)/keys
+rel_bin: $(DST)/$(OSTYPE)/bin $(DST)/keys
 	$(MAKE) -C $(CST_CODE_PATH)/obj.$(OSTYPE) rel_bin
 
 # build binaries for the given configuration

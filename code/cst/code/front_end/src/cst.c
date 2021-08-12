@@ -12,7 +12,7 @@
 
               Freescale Semiconductor
       (c) Freescale Semiconductor, Inc. 2011-2015. All rights reserved.
-      Copyright 2018-2019 NXP
+      Copyright 2018-2020 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -80,6 +80,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern int32_t yyparse(void);
 extern FILE *yyin;
 extern int g_no_ca;
+extern int32_t g_srk_set_hab4;
 /*===========================================================================
                   INSTANTIATE GLOBAL VARIABLES
 =============================================================================*/
@@ -119,13 +120,15 @@ ahab_data_t g_ahab_data = {
  * Array of size HAB_KEY_PUBLIC_MAX for key cert file names.
  */
 char *g_key_certs[HAB_KEY_PUBLIC_MAX] = {
-    NULL, NULL, NULL, NULL, NULL
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
 };
 
 /**
  * Array of AES keys.
  */
 aes_key_t g_aes_keys[HAB_KEY_SECRET_MAX] = {
+    {0, NULL},
+    {0, NULL},
     {0, NULL},
     {0, NULL},
     {0, NULL},
@@ -335,8 +338,8 @@ static map_t label_map[] = {
     {"sw", (uint32_t)HAB_ENG_SW},
     {"x509", (uint32_t)HAB_PCL_X509},
     {"CMS", (uint32_t)SIG_FMT_CMS},
-    {"srk", (uint32_t)HAB_IDX_SRK},
-    {"csfk", (uint32_t)HAB_IDX_CSFK},
+    //{"srk", (uint32_t)HAB_IDX_SRK},
+    //{"csfk", (uint32_t)HAB_IDX_CSFK},
     {"OCOTP", (uint32_t)HAB_ENG_OCOTP},
     {"SNVS", (uint32_t)HAB_ENG_SNVS},
     {"DTCP", (uint32_t)HAB_ENG_DTCP},
@@ -1180,12 +1183,12 @@ int32_t save_file_data(command_t *cmd, char *file, uint8_t *cert_data,
                        size_t cert_len, int32_t add_header, uint8_t **crt_hash,
                        size_t *hash_len, int32_t hash_alg)
 {
-    uint32_t file_size;         /**< File size is read into it, useful in
+    size_t file_size;          /**< File size is read into it, useful in
                                     calulating length field of cmd header */
     int32_t ret_val = SUCCESS; /**< To return and keep track of errors */
     uint8_t *data = NULL;      /**< Ptr to buffer for reading in file data */
     int32_t header_bytes;      /**< Needed for the size of header */
-    int32_t data_size;         /**< For total size of certificate or
+    size_t data_size;          /**< For total size of certificate or
                                     signature */
     uint8_t hdr_tag;           /**< Used in HDR macro, set to either CRT or
                                     SIG */
@@ -1260,7 +1263,7 @@ int32_t save_file_data(command_t *cmd, char *file, uint8_t *cert_data,
         memset(data, 0, data_size);
         if (file)
         {
-            if (fread(data+header_bytes, 1, file_size, fh) != file_size)
+            if (fread(data+header_bytes, 1, file_size, fh) != (size_t)file_size)
             {
                 log_error_msg(file);
                 ret_val = ERROR_READING_FILE;
@@ -1343,7 +1346,7 @@ int32_t save_file_data(command_t *cmd, char *file, uint8_t *cert_data,
  */
 int32_t create_sig_file(char *file, char *cert_file,
         sig_fmt_t sig_fmt, uint8_t *data,
-        uint32_t data_size)
+        size_t data_size)
 {
     uint8_t sig[SIGNATURE_BUFFER_SIZE];  /**< Signature buffer on stack */
     hash_alg_t hash;    /**< Hash algorithm to pass into adaptation layer API */
@@ -1356,7 +1359,7 @@ int32_t create_sig_file(char *file, char *cert_file,
      * signature data and gen_sig_data returns actual size of signature
      * data in this argument
      */
-    uint32_t sig_size = SIGNATURE_BUFFER_SIZE;
+    size_t sig_size = SIGNATURE_BUFFER_SIZE;
 
     do {
         /**
@@ -1463,7 +1466,7 @@ static int update_offsets_in_csf(uint8_t * buf, command_t * cmd_csf, uint32_t cs
         if (cmd->start_offset_cert_sig > 0)
         {
             uint8_t offset_bytes[] = {
-                EXPAND_UINT32(cert_sig_offset)
+                EXPAND_UINT32((uint32_t)cert_sig_offset)
             };         /**< Macro puts offets into the buffer */
 
             memcpy(&buf[cmd->start_offset_cert_sig], offset_bytes, 4);
@@ -1736,6 +1739,12 @@ int32_t main(int32_t argc, char* argv[])
             and replace the dummy one with it
         */
         do {
+            uint32_t csfk_idx = (g_srk_set_hab4 == SRK_SET_OEM) ? HAB_IDX_CSFK : HAB_IDX_CSFK1;
+
+            /* Adjust CSFK index if NOCAK */
+            if (g_no_ca == 1) {
+                csfk_idx = HAB_IDX_CSFK;
+            }
 
             cmd = g_cmd_head;
 
@@ -1770,7 +1779,7 @@ int32_t main(int32_t argc, char* argv[])
 
             /* create signature for csf data into FILE_SIG_CSF_DATA */
             ret_val = create_sig_file(FILE_SIG_CSF_DATA,
-                g_key_certs[HAB_IDX_CSFK],
+                g_key_certs[csfk_idx],
                 (g_hab_version >= HAB4) ? SIG_FMT_CMS : SIG_FMT_PKCS1,
                 g_csf_buffer,
                 g_csf_buffer_index);

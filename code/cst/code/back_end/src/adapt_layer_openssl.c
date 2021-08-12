@@ -12,7 +12,7 @@
 
               Freescale Semiconductor
         (c) Freescale Semiconductor, Inc. 2011-2015. All rights reserved.
-        Copyright 2018 NXP
+        Copyright 2018, 2020 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -61,6 +61,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "adapt_layer.h"
 #include "openssl_helper.h"
 #include "pkey.h"
+#include "csf.h"
 #if (defined _WIN32 || defined __CYGWIN__) && defined USE_APPLINK
 #include <openssl/applink.c>
 #endif
@@ -257,11 +258,11 @@ display_error(const char *err);
 /*===========================================================================
                                GLOBAL VARIABLES
 =============================================================================*/
+extern int g_dummy_csf_data_generated;
 
 /*===========================================================================
                                LOCAL FUNCTIONS
 =============================================================================*/
-
 /*--------------------------
   get_NID
 ---------------------------*/
@@ -286,7 +287,7 @@ gen_sig_data_raw(const char *in_file,
     uint8_t *rsa_in = NULL; /**< Mem ptr for hash data of in_file */
     uint8_t *rsa_out = NULL; /**< Mem ptr for encrypted data */
     int32_t rsa_inbytes; /**< Holds the length of rsa_in buf */
-    int32_t rsa_outbytes = 0; /**< Holds the length of rsa_out buf */
+    unsigned int rsa_outbytes = 0; /**< Holds the length of rsa_out buf */
     int32_t key_bytes; /**< Size of key data */
     int32_t hash_nid; /**< hash id needed for RSA_sign() */
     /** Array to hold error string */
@@ -513,7 +514,7 @@ gen_sig_data_ecdsa(const char *in_file,
 {
     BIO          *bio_in    = NULL;          /**< BIO for in_file data    */
     EVP_PKEY     *key       = NULL;          /**< Private key data        */
-    uint32_t     key_size   = 0;             /**< n of bytes of key param */
+    size_t       key_size   = 0;             /**< n of bytes of key param */
     const EVP_MD *sign_md   = NULL;          /**< Digest name             */
     uint8_t      *hash      = NULL;          /**< Hash data of in_file    */
     int32_t      hash_bytes = 0;             /**< Length of hash buffer   */
@@ -632,6 +633,144 @@ display_error(const char *err)
 }
 
 /*--------------------------
+  calculate_sig_buf_size
+---------------------------*/
+#define SIG_BUF_FIXED_DATA_SIZE 217
+
+int32_t
+calculate_sig_buf_size(const char *cert_file) {
+    X509 *cert;
+    EVP_PKEY *public_key;
+    RSA *rsa_key;
+    int key_length = 0;
+    ASN1_INTEGER *serial_num;
+    int sn_length = 0;
+    char *issuer_name;
+    int issuer_name_length = 0;
+
+    /* Calculate Signature Size for padding purposes in CSF binary:
+    *     It has been experimentally evalutated and noted that the variables in
+    *     signature size is related to three entries in the CMS format. This is
+    *     only considering signatures from the keys created from the CST PKI
+    *     scripts.
+    *
+    *     The fixed size of the CMS structure was experimentally
+    *     determined to be 217 bytes.
+    *
+    *     The three entries that appear to alter the size:
+    *         Serial Number (SN)
+    *         CA Certificate Name
+    *         RSA Encryption  (this size is equal to key size in bytes)
+    *
+    *     Given the above the current approach to calculating the signature size:
+    *
+    *         <fixed size (217)> + <SN Size> + <CA Name Size> + <RSA Data Size>
+    */
+    /* Gather Signing Key Details */
+    cert = read_certificate(cert_file);
+    public_key = X509_get_pubkey(cert);
+    rsa_key =  EVP_PKEY_get1_RSA(public_key);
+    key_length = RSA_size(rsa_key);
+    serial_num = X509_get_serialNumber(cert);
+    sn_length = serial_num->length;
+    issuer_name = X509_NAME_oneline(X509_get_issuer_name(cert),NULL, 0);
+    issuer_name_length = strlen(issuer_name);
+
+    return (SIG_BUF_FIXED_DATA_SIZE + key_length + sn_length + issuer_name_length);
+}
+
+/*--------------------------
+  export_habv4_signature_request
+---------------------------*/
+int32_t
+export_habv4_signature_request(const char *in_file,
+                               const char *cert_file,
+                               uint8_t *sig_buf,
+                               size_t *sig_buf_bytes)
+{
+    FILE *sig_req_fp = NULL;
+    int unique_ident[2];
+
+    if(g_dummy_csf_data_generated == 1)
+    {
+        FILE *in_file_fp = NULL;
+        FILE *cpy_data_fp = NULL;
+        char tmp_filename[80];
+        int in_data_size = 0;
+
+        /* Open data file */
+        if(!(in_file_fp = fopen(in_file, "rb")))
+        {
+            printf("Unable to open tmp data file\n");
+            return -1;
+        }
+
+        /* Determine the data file size */
+        if(fseek(in_file_fp,0L,SEEK_END) == -1)
+        {
+            printf("Unable to get in_data filesize\n");
+            fclose(in_file_fp);
+            return -1;
+        }
+        if ((in_data_size = ftell(in_file_fp)) < 0) {
+            printf("Unable to get in_data filesize\n");
+            fclose(in_file_fp);
+            return -1;
+        }
+
+        /* Set the fp to the beginning of the data file */
+        rewind(in_file_fp);
+
+        /* Create the output data file name */
+        strcpy(tmp_filename,"data_");
+        strcat(tmp_filename,in_file);
+
+        /* Copy the data file to the output data file */
+        cpy_data_fp = fopen(tmp_filename, "w");
+
+        while (in_data_size--)
+        {
+            char tmp;
+            tmp = fgetc(in_file_fp);  // copying file character by character
+            fputc(tmp, cpy_data_fp);
+        }
+
+        /* Create unique identifier */
+        unique_ident[0] = rand();
+        unique_ident[1] = rand();
+
+        /* Add entry to signing request file for new data file */
+        sig_req_fp = fopen("sig_request.txt", "a");
+        fseek(sig_req_fp, 0L, SEEK_END);
+        fprintf(sig_req_fp,"Signing Request:\n");
+        fprintf(sig_req_fp,"%s\n", cert_file);
+        fprintf(sig_req_fp,"%s\n", tmp_filename);
+        fprintf(sig_req_fp,"unique tag: %08x%08x\n",unique_ident[1], unique_ident[0]);
+
+        /* Close all files */
+        fclose(in_file_fp);
+        fclose(cpy_data_fp);
+        fclose(sig_req_fp);
+    } else {
+        /* Seed rand() to generate unique data tags on the next pass */
+        srand(time(0));
+
+        /* Ensure any data in the digest file is cleared. */
+        if((sig_req_fp = fopen("sig_request.txt", "w")))
+        {
+            fclose(sig_req_fp);
+        }
+    }
+
+    *sig_buf_bytes = calculate_sig_buf_size(cert_file);
+
+    memset(sig_buf, 0, *sig_buf_bytes);
+    memcpy(sig_buf, unique_ident, sizeof(unique_ident) );
+
+    return 0;
+}
+
+/*--------------------------
   export_signature_request
 ---------------------------*/
 int32_t export_signature_request(const char *in_file,
@@ -697,7 +836,12 @@ int32_t gen_sig_data(const char* in_file,
 
     if (MODE_HSM == mode)
     {
-        return export_signature_request(in_file, cert_file);
+        if ( TGT_AHAB == g_target ) {
+            return export_signature_request(in_file, cert_file);
+        } else if ( TGT_HAB == g_target ) {
+            return export_habv4_signature_request(in_file, cert_file,
+                                            sig_buf, sig_buf_bytes);
+        }
     }
 
     /* Determine private key filename from given certificate filename */
@@ -729,6 +873,36 @@ int32_t gen_sig_data(const char* in_file,
 
     free(key_file);
     return err;
+}
+
+/*--------------------------------
+  get_der_encoded_certificate_data
+----------------------------------*/
+int32_t get_der_encoded_certificate_data(const char* reference,
+                                         uint8_t ** der)
+{
+    /** Used for returning either size of der data or 0 to indicate an error */
+    int32_t ret_val = 0;
+
+    /* Read X509 certificate data from cert file */
+    X509 *cert = read_certificate(reference);
+
+    if (cert != NULL)
+    {
+        /* i2d_X509() allocates memory for der data, converts the X509
+         * cert structure to binary der formatted data.  It then
+         * returns the address of the memory allocated for the der data
+         */
+        ret_val = i2d_X509(cert, der);
+
+        /* On error return 0 */
+        if (ret_val < 0)
+        {
+            ret_val = 0;
+        }
+        X509_free(cert);
+    }
+    return ret_val;
 }
 
 /*--------------------------

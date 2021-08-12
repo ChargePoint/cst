@@ -9,12 +9,12 @@
 #
 #             Freescale Semiconductor
 #    (c) Freescale Semiconductor, Inc. 2011-2015. All rights reserved.
-#    Copyright 2018 NXP
+#    Copyright 2018, 2020 NXP
 #
 #
 #==============================================================================
 
-ifneq ($(ENCRYPTION), yes)
+ifeq ($(ENCRYPTION), no)
 	CDEFINES := -DREMOVE_ENCRYPTION
 endif
 

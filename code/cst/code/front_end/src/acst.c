@@ -9,7 +9,7 @@
 @verbatim
 =============================================================================
 
-    Copyright 2018-2019 NXP
+    Copyright 2018-2020 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -45,7 +45,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <openssl/x509v3.h>
 #include "err.h"
 #include "srk_helper.h"
-#include "csf.h"
+#include "misc_helper.h"
 
 /*===========================================================================
                                LOCAL CONSTANTS
@@ -61,15 +61,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /*===========================================================================
                   LOCAL TYPEDEFS (STRUCTURES, UNIONS, ENUMS)
 =============================================================================*/
-/** Byte string
- *
- * Defines the byte string struct
- */
-typedef struct byte_str_s
-{
-    uint8_t *entry;
-    size_t  entry_bytes;
-} byte_str_t;
 
 /*===========================================================================
                             LOCAL VARIABLES
@@ -79,23 +70,6 @@ char err_msg[MAX_ERR_MSG_BYTES];
 /*===========================================================================
                             LOCAL FUNCTION PROTOTYPES
 =============================================================================*/
-/** Read bytes from a file
- *
- * Reads an amount of bytes from an input file
- *
- * @param[in]  filename Input file name to be read
- *
- * @param[out] byte_str Byte string struct to return the read data
- *
- * @param[in]  offsets  If defined,
- *
- * @pre @a filename and @a offsets must not be NULL
- *
- * @post none
- */
-static void
-read_file(const char *filename, byte_str_t *byte_str, offsets_t *offsets);
-
 /** Retrieve hash algo
  *
  * Reads an SRK table to retrieve the hash algo information
@@ -211,71 +185,6 @@ generate_output(FILE       *dst_tmp,
 /*===========================================================================
                             LOCAL FUNCTIONS
 =============================================================================*/
-
-/*--------------------------
-  read_file
----------------------------*/
-void read_file(const char *filename, byte_str_t *byte_str, offsets_t *offsets)
-{
-    FILE     *file = NULL;
-    uint32_t bytes_to_read, read_size;
-
-    /* Open the source file */
-    file = fopen(filename, "rb");
-    if (NULL == file)
-    {
-        snprintf(err_msg, MAX_ERR_MSG_BYTES, "Cannot open %s", filename);
-        error(err_msg);
-    }
-
-    /* Get the file size */
-    fseek(file, 0, SEEK_END);
-    bytes_to_read = ftell(file);
-    rewind(file);
-
-    /* If some offsets are specified, refine the number of bytes to be read */
-    if (NULL != offsets)
-    {
-        if ((bytes_to_read < offsets->first)
-            || (bytes_to_read < offsets->second))
-        {
-            snprintf(err_msg,
-                     MAX_ERR_MSG_BYTES,
-                     "Offsets defined outside the file %s",
-                     filename);
-            error(err_msg);
-        }
-
-        if (offsets->first > offsets->second)
-        {
-            error("Incorrect offsets");
-        }
-
-        bytes_to_read = offsets->second - offsets->first;
-
-        fseek(file, offsets->first, SEEK_SET);
-    }
-
-    /* Save the file data */
-    byte_str->entry_bytes = bytes_to_read;
-    byte_str->entry       = malloc(bytes_to_read);
-    if (NULL == byte_str->entry)
-    {
-        snprintf(err_msg, MAX_ERR_MSG_BYTES, "Cannot allocate memory for handling %s", filename);
-        error(err_msg);
-    }
-    memset(byte_str->entry, 0, bytes_to_read);
-    read_size = fread(byte_str->entry, 1, bytes_to_read, file);
-
-    if (read_size != bytes_to_read)
-    {
-        snprintf(err_msg, MAX_ERR_MSG_BYTES, "Unexpected read termination of %s", filename);
-        error(err_msg);
-    }
-
-    fclose(file);
-}
-
 /*--------------------------
   ahab_hash_2_cst_hash
 ---------------------------*/
@@ -788,14 +697,15 @@ void encrypt_images(ahab_data_t *ahab_data,
 
         uint8_t hash_type = ahab_container_image_get_hash(image);
         int32_t hash_size = ahab_get_hash_size_by_sha_type(hash_type);
+
+        if (hash_size < 0) {
+            error("Unsupported hash algorithm for image integrity");
+        }
+
         uint8_t *hash = malloc(hash_size);
 
         if (NULL ==  hash) {
             error("Cannot allocate memory for the hash value of the plaintext");
-        }
-
-        if (hash_size < 0) {
-            error("Unsupported hash algorithm for image integrity");
         }
 
         /* Retrieve image data */
@@ -887,7 +797,7 @@ void encrypt_images(ahab_data_t *ahab_data,
                             get_digest_name(ahab_hash_2_cst_hash(hash_type)),
                             &digest_size);
 
-        if (digest_size != hash_size) {
+        if (digest_size != (size_t)hash_size) {
             error("Fail to generate hash of encrypted data of image index %d", i);
         }
 

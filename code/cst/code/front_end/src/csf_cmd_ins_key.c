@@ -10,7 +10,7 @@
 
               Freescale Semiconductor
         (c) Freescale Semiconductor, Inc. 2011-2015. All rights reserved.
-        Copyright 2018 NXP
+        Copyright 2018, 2020 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -48,7 +48,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #define HAB_FUTURE
 #include <hab_cmd.h>
-#include <csf.h>
 #include <openssl/bio.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
@@ -56,6 +55,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl_helper.h>
+#include <misc_helper.h>
 /*===========================================================================
                                 MACROS
 =============================================================================*/
@@ -78,6 +78,9 @@ static int32_t hab4_install_secret_key(int32_t src_index, int32_t tgt_index,
         uint32_t blob_address, uint8_t *buf, int32_t *cmd_len);
 
 extern int g_no_ca;
+
+extern int32_t g_srk_set_hab4;
+
 /*===========================================================================
                              LOCAL FUNCTION DEFINITIONS
 =============================================================================*/
@@ -122,11 +125,28 @@ static int32_t process_installkey_arguments(command_t* cmd, char** cert_file,
     uint32_t i;                      /**< Loop index        */
     argument_t *arg = cmd->argument; /**< Ptr to argument_t */
 
+    bool flag_fname         = false;
+    bool flag_src_vfy_idx   = false;
+    bool flag_tgt_idx       = false;
+    bool flag_hsh_alg       = false;
+    bool flag_crt_fmt       = false;
+    bool flag_key           = false;
+    bool flag_key_len       = false;
+    bool flag_blob          = false;
+    bool flag_src           = false;
+    bool flag_perm          = false;
+    bool flag_sig           = false;
+    bool flag_src_set       = false;
+    bool flag_revoc         = false;
+    bool flag_key_id        = false;
+    bool flag_img_idx       = false;
+
     for(i=0; i<cmd->argument_count; i++)
     {
         switch((arguments_t)arg->type)
         {
         case Filename:
+            ERR_IF_INIT_MULT_TIMES(flag_fname);
             if(cert_file != NULL)
                 *cert_file = arg->value.keyword->string_value;
             else
@@ -137,6 +157,7 @@ static int32_t process_installkey_arguments(command_t* cmd, char** cert_file,
             break;
         case SourceIndex:
         case VerificationIndex:
+            ERR_IF_INIT_MULT_TIMES(flag_src_vfy_idx);
             if(src_index != NULL)
                 *src_index = arg->value.number->num_value;
             else
@@ -146,6 +167,7 @@ static int32_t process_installkey_arguments(command_t* cmd, char** cert_file,
             }
             break;
         case TargetIndex:
+            ERR_IF_INIT_MULT_TIMES(flag_tgt_idx);
             if(tgt_index != NULL)
                 *tgt_index = arg->value.number->num_value;
             else
@@ -155,6 +177,7 @@ static int32_t process_installkey_arguments(command_t* cmd, char** cert_file,
             }
             break;
         case HashAlgorithm:
+            ERR_IF_INIT_MULT_TIMES(flag_hsh_alg);
             if(hash_alg != NULL)
                 *hash_alg = arg->value.keyword->unsigned_value;
             else
@@ -164,6 +187,7 @@ static int32_t process_installkey_arguments(command_t* cmd, char** cert_file,
             }
             break;
         case CertificateFormat:
+            ERR_IF_INIT_MULT_TIMES(flag_crt_fmt);
             if (cert_format != NULL)
                 *cert_format = arg->value.keyword->unsigned_value;
             else
@@ -173,6 +197,7 @@ static int32_t process_installkey_arguments(command_t* cmd, char** cert_file,
             }
             break;
         case Key:
+            ERR_IF_INIT_MULT_TIMES(flag_key);
             if(key_file != NULL)
             {
                 *key_file = arg->value.keyword->string_value;
@@ -184,6 +209,7 @@ static int32_t process_installkey_arguments(command_t* cmd, char** cert_file,
             }
             break;
         case KeyLength:
+            ERR_IF_INIT_MULT_TIMES(flag_key_len);
             if (key_length != NULL)
             {
                 *key_length = arg->value.number->num_value;
@@ -195,6 +221,7 @@ static int32_t process_installkey_arguments(command_t* cmd, char** cert_file,
             }
             break;
         case BlobAddress:
+            ERR_IF_INIT_MULT_TIMES(flag_blob);
             if (blob_address != NULL)
             {
                 *blob_address = arg->value.number->num_value;
@@ -206,6 +233,7 @@ static int32_t process_installkey_arguments(command_t* cmd, char** cert_file,
             }
             break;
         case Source:
+            ERR_IF_INIT_MULT_TIMES(flag_src);
             if(src != NULL)
                 *src = arg->value.keyword->string_value;
             else
@@ -215,6 +243,7 @@ static int32_t process_installkey_arguments(command_t* cmd, char** cert_file,
             }
             break;
         case Permissions:
+            ERR_IF_INIT_MULT_TIMES(flag_perm);
             if (perm != NULL)
             {
                 *perm = arg->value.number->num_value;
@@ -226,6 +255,7 @@ static int32_t process_installkey_arguments(command_t* cmd, char** cert_file,
             }
             break;
         case Signature:
+            ERR_IF_INIT_MULT_TIMES(flag_sig);
             if(sign != NULL)
                 *sign = arg->value.keyword->string_value;
             else
@@ -235,6 +265,7 @@ static int32_t process_installkey_arguments(command_t* cmd, char** cert_file,
             }
             break;
         case SourceSet:
+            ERR_IF_INIT_MULT_TIMES(flag_src_set);
             if (src_set != NULL)
             {
                 *src_set = arg->value.keyword->unsigned_value;
@@ -246,6 +277,7 @@ static int32_t process_installkey_arguments(command_t* cmd, char** cert_file,
             }
             break;
         case Revocations:
+            ERR_IF_INIT_MULT_TIMES(flag_revoc);
             if (revocations != NULL)
             {
                 *revocations = arg->value.number->num_value;
@@ -257,6 +289,7 @@ static int32_t process_installkey_arguments(command_t* cmd, char** cert_file,
             }
             break;
         case KeyIdentifier:
+            ERR_IF_INIT_MULT_TIMES(flag_key_id);
             if (key_identifier != NULL)
             {
                 *key_identifier = arg->value.number->num_value;
@@ -268,6 +301,7 @@ static int32_t process_installkey_arguments(command_t* cmd, char** cert_file,
             }
             break;
         case ImageIndexes:
+            ERR_IF_INIT_MULT_TIMES(flag_img_idx);
             if (image_indexes != NULL)
             {
                 *image_indexes = arg->value.number->num_value;
@@ -326,7 +360,7 @@ static int32_t hab4_install_key(int32_t src_index, int32_t tgt_index, int32_t ha
     int32_t flag = HAB_CMD_INS_KEY_CLR;   /**< Let flag be set for relative
                                                addresses */
 
-    if(tgt_index == HAB_IDX_CSFK)
+    if(tgt_index == HAB_IDX_CSFK || tgt_index == HAB_IDX_CSFK1)
         flag |= HAB_CMD_INS_KEY_CSF;
 
     *cmd_len = INS_KEY_BASE_BYTES;
@@ -425,6 +459,10 @@ int32_t cmd_handler_installsrk(command_t* cmd)
     int32_t cmd_len = 0;        /**< Used to keep track of cmd length */
     int32_t src_set = -1;       /**< Holds source set argument value */
     int32_t revocations = -1;   /**< Holds revocation mask argument value */
+    char    *key_cert;
+    uint32_t srk_idx;
+
+    printf("Install SRK\n");
 
     /* get the arguments */
     /* srk key cert is at index 0 */
@@ -437,9 +475,9 @@ int32_t cmd_handler_installsrk(command_t* cmd)
     }
     else
     {
-        ret_val = process_installkey_arguments(cmd, &g_key_certs[HAB_IDX_SRK],
+        ret_val = process_installkey_arguments(cmd, &key_cert,
             &src_index, NULL, &hash_alg, &cert_format, NULL, NULL, NULL, NULL, NULL, NULL,
-            NULL, NULL, NULL, NULL);
+            &src_set, NULL, NULL, NULL);
     }
 
     if(ret_val != SUCCESS)
@@ -450,18 +488,42 @@ int32_t cmd_handler_installsrk(command_t* cmd)
     do {
         if (TGT_AHAB == g_target)
         {
+            byte_str_t ahab_srk_table = {NULL, 0};
+
             if(NULL == g_ahab_data.srk_table)
             {
                 log_arg_cmd(Filename, NULL, cmd->type);
                 ret_val = ERROR_INSUFFICIENT_ARGUMENTS;
                 break;
             }
-            if(NULL == g_ahab_data.srk_entry)
+
+            /* Read the srk table file into temporary buffer */
+            /*** NOTE: read_file() allocates memory that must be freed ***/
+            read_file(g_ahab_data.srk_table, &ahab_srk_table, NULL);
+            if(!ahab_srk_table.entry || ahab_srk_table.entry_bytes <= 0)
             {
-                log_arg_cmd(Source, NULL, cmd->type);
-                ret_val = ERROR_INSUFFICIENT_ARGUMENTS;
+                log_arg_cmd(Filename, NULL, cmd->type);
+                ret_val = ERROR_INSUFFICIENT_MEMORY;
                 break;
             }
+
+            /* Check for valid tag and AHAB version in Super Root Key table
+             * saved at g_ahab_data.srk_table
+             */
+            if((((struct ahab_container_srk_table_s *)(ahab_srk_table.entry))->tag != SRK_TABLE_TAG) || \
+               (((struct ahab_container_srk_table_s *)(ahab_srk_table.entry))->version != SRK_TABLE_VERSION))
+            {
+                log_arg_cmd(Filename, g_ahab_data.srk_table, cmd->type);
+                ret_val = ERROR_INVALID_SRK_TABLE;
+                free(ahab_srk_table.entry);
+                break;
+            }
+
+            /* read_file allocates memory, so it must be freed and reset srk_entry pointer */
+            free(ahab_srk_table.entry);
+            ahab_srk_table.entry = NULL;
+            ahab_srk_table.entry_bytes = 0;
+
             if (src_index == -1)
             {
                 log_arg_cmd(SourceIndex, NULL, cmd->type);
@@ -516,8 +578,25 @@ int32_t cmd_handler_installsrk(command_t* cmd)
         else
         if(g_hab_version >= HAB4)
         {
+            /* SRK set */
+            if (src_set == -1)
+            {
+                src_set = SRK_SET_OEM;
+            }
+            else if ((src_set != SRK_SET_OEM) && (src_set != SRK_SET_NXP))
+            {
+                log_arg_cmd(SourceSet, " must be equal to OEM or NXP", cmd->type);
+                ret_val = ERROR_INVALID_ARGUMENT;
+                break;
+            }
+            g_srk_set_hab4 = src_set;
+
+            srk_idx = (g_srk_set_hab4 == SRK_SET_OEM) ? HAB_IDX_SRK : HAB_IDX_SRK1;
+
+            g_key_certs[srk_idx] = key_cert;
+
             /* validate the arguments */
-            if(g_key_certs[HAB_IDX_SRK] == NULL)
+            if(g_key_certs[srk_idx] == NULL)
             {
                 log_arg_cmd(Filename, NULL, cmd->type);
                 ret_val = ERROR_INSUFFICIENT_ARGUMENTS;
@@ -529,6 +608,13 @@ int32_t cmd_handler_installsrk(command_t* cmd)
                 ret_val = ERROR_INSUFFICIENT_ARGUMENTS;
                 break;
             }
+            else if (src_index < SRC_IDX_INS_KEY_MIN || src_index > SRC_IDX_INS_KEY_MAX)
+            {
+                log_arg_cmd(SourceIndex, NULL, cmd->type);
+                ret_val = ERROR_INVALID_ARGUMENT;
+                break;
+            }
+
             /* certificate format is not an option */
             if(cert_format != -1)
             {
@@ -543,25 +629,26 @@ int32_t cmd_handler_installsrk(command_t* cmd)
                 hash_alg = g_hash_alg;
 
             /* Read data from cert and save the data pointer into command */
-            ret_val = save_file_data(cmd, g_key_certs[HAB_IDX_SRK], NULL, 0,
+            ret_val = save_file_data(cmd, g_key_certs[srk_idx], NULL, 0,
                 0, NULL, NULL, hash_alg);
             if(ret_val != SUCCESS)
                 break;
 
-            /* Check for valid tag for Super Root Key table saved at
-             * cmd->cert_sig_data
+            /* Check for valid tag and HAB version in Super Root Key table
+             * saved at cmd->cert_sig_data
              */
-            if(cmd->cert_sig_data[0] != HAB_TAG_CRT)
+            if((cmd->cert_sig_data[SRK_TABLE_TAG_OFFSET] != HAB_TAG_CRT) || \
+               (cmd->cert_sig_data[SRK_TABLE_VER_OFFSET] != HAB4))
             {
                 ret_val = ERROR_INVALID_SRK_TABLE;
-                log_error_msg(g_key_certs[HAB_IDX_SRK]);
+                log_error_msg(g_key_certs[srk_idx]);
                 break;
             }
             cmd->start_offset_cert_sig = g_csf_buffer_index +
                 HAB4_INSTALL_KEY_CMD_CERT_OFFSET;
 
             /* generate INS_SRK command */
-            ret_val = hab4_install_key(src_index, HAB_IDX_SRK,
+            ret_val = hab4_install_key(src_index, srk_idx,
                 hash_alg, cert_format, NULL, 0,
                 &g_csf_buffer[g_csf_buffer_index], &cmd_len);
             if(ret_val != SUCCESS)
@@ -606,6 +693,11 @@ int32_t cmd_handler_installcsfk(command_t* cmd)
     uint8_t *cert_data = NULL;  /**< DER encoded certificate data */
     int32_t cert_len = 0;       /**< length of certificate data */
 
+    uint32_t srk_idx = (g_srk_set_hab4 == SRK_SET_OEM) ? HAB_IDX_SRK : HAB_IDX_SRK1;
+    uint32_t csfk_idx = (g_srk_set_hab4 == SRK_SET_OEM) ? HAB_IDX_CSFK : HAB_IDX_CSFK1;
+
+    printf("Install CSFK\n");
+
     /* The Install CSFK command is invalid when AHAB is targeted */
     if (TGT_AHAB == g_target)
     {
@@ -615,7 +707,7 @@ int32_t cmd_handler_installcsfk(command_t* cmd)
 
     /* get the arguments */
     /* csf key is at index 1 */
-    ret_val = process_installkey_arguments(cmd, &g_key_certs[HAB_IDX_CSFK],
+    ret_val = process_installkey_arguments(cmd, &g_key_certs[csfk_idx],
         NULL, NULL, NULL, &cert_format, NULL, NULL, NULL, NULL, NULL, NULL,
         NULL, NULL, NULL, NULL);
 
@@ -629,7 +721,7 @@ int32_t cmd_handler_installcsfk(command_t* cmd)
         if(g_hab_version >= HAB4)
         {
             /* validate the arguments */
-            if(g_key_certs[HAB_IDX_CSFK] == NULL)
+            if(g_key_certs[csfk_idx] == NULL)
             {
                 log_arg_cmd(Filename, NULL, cmd->type);
                 ret_val = ERROR_INSUFFICIENT_ARGUMENTS;
@@ -647,11 +739,11 @@ int32_t cmd_handler_installcsfk(command_t* cmd)
 
             /* Read data from cert and save the data pointer into command */
             cert_len = get_der_encoded_certificate_data(
-                g_key_certs[HAB_IDX_CSFK], &cert_data);
+                g_key_certs[csfk_idx], &cert_data);
             if(cert_len == 0)
             {
                 ret_val = ERROR_INVALID_PKEY_CERTIFICATE;
-                log_error_msg(g_key_certs[HAB_IDX_CSFK]);
+                log_error_msg(g_key_certs[csfk_idx]);
                 break;
             }
 
@@ -664,8 +756,8 @@ int32_t cmd_handler_installcsfk(command_t* cmd)
                 HAB4_INSTALL_KEY_CMD_CERT_OFFSET;
 
             /* generate INS_CSFK command */
-            ret_val = hab4_install_key(HAB_IDX_SRK,
-                HAB_IDX_CSFK, HAB_ALG_ANY, cert_format, NULL, 0,
+            ret_val = hab4_install_key(srk_idx,
+                csfk_idx, HAB_ALG_ANY, cert_format, NULL, 0,
                 &g_csf_buffer[g_csf_buffer_index], &cmd_len);
             if(ret_val != SUCCESS)
                 break;
@@ -707,6 +799,10 @@ int32_t cmd_handler_installnocak(command_t* cmd)
     uint8_t *cert_data = NULL;  /**< DER encoded certificate data */
     int32_t cert_len = 0;       /**< length of certificate data */
 
+    uint32_t csfk_idx = HAB_IDX_CSFK;
+
+    printf("Install no CAK\n");
+
    /* The Install NOCAK command is invalid when AHAB is targeted */
     if (TGT_AHAB == g_target)
     {
@@ -717,7 +813,7 @@ int32_t cmd_handler_installnocak(command_t* cmd)
     g_no_ca = 1;
     /* get the arguments */
     /* csf key is at index 1 */
-    ret_val = process_installkey_arguments(cmd, &g_key_certs[HAB_IDX_CSFK],
+    ret_val = process_installkey_arguments(cmd, &g_key_certs[csfk_idx],
         NULL, NULL, NULL, &cert_format, NULL, NULL, NULL, NULL, NULL, NULL,
         NULL, NULL, NULL, NULL);
 
@@ -731,7 +827,7 @@ int32_t cmd_handler_installnocak(command_t* cmd)
         if(g_hab_version >= HAB4)
         {
             /* validate the arguments */
-            if(g_key_certs[HAB_IDX_CSFK] == NULL)
+            if(g_key_certs[csfk_idx] == NULL)
             {
                 log_arg_cmd(Filename, NULL, cmd->type);
                 ret_val = ERROR_INSUFFICIENT_ARGUMENTS;
@@ -749,11 +845,11 @@ int32_t cmd_handler_installnocak(command_t* cmd)
 
             /* Read data from cert and save the data pointer into command */
             cert_len = get_der_encoded_certificate_data(
-                g_key_certs[HAB_IDX_CSFK], &cert_data);
+                g_key_certs[csfk_idx], &cert_data);
             if(cert_len == 0)
             {
                 ret_val = ERROR_INVALID_PKEY_CERTIFICATE;
-                log_error_msg(g_key_certs[HAB_IDX_CSFK]);
+                log_error_msg(g_key_certs[csfk_idx]);
                 break;
             }
 
@@ -810,6 +906,8 @@ int32_t cmd_handler_installkey(command_t* cmd)
     uint8_t *cert_data = NULL;  /**< DER encoded certificate data */
     int32_t cert_len = 0;       /**< length of certificate data */
 
+    printf("Install key\n");
+
     /* The Install Key command is invalid when AHAB is targeted */
     if (TGT_AHAB == g_target)
     {
@@ -844,14 +942,26 @@ int32_t cmd_handler_installkey(command_t* cmd)
                 ret_val = ERROR_INSUFFICIENT_ARGUMENTS;
                 break;
             }
+            else if ((vfy_index != VFY_IDX_INS_KEY_SRK) && \
+	             (vfy_index < VFY_IDX_INS_KEY_MIN || vfy_index > VFY_IDX_INS_KEY_MAX))
+            {
+                log_arg_cmd(VerificationIndex, NULL, cmd->type);
+                ret_val = ERROR_INVALID_ARGUMENT;
+                break;
+            }
+
             if(tgt_index == -1)
             {
                 log_arg_cmd(TargetIndex, NULL, cmd->type);
                 ret_val = ERROR_INSUFFICIENT_ARGUMENTS;
                 break;
             }
-            if(tgt_index == HAB_IDX_SRK || tgt_index == HAB_IDX_CSFK)
-            {
+            if(
+                tgt_index == HAB_IDX_SRK
+                || tgt_index == HAB_IDX_CSFK
+                || tgt_index == HAB_IDX_SRK1
+                || tgt_index == HAB_IDX_CSFK1
+            ) {
                 log_arg_cmd(TargetIndex, NULL, cmd->type);
                 ret_val = ERROR_INVALID_ARGUMENT;
                 break;
@@ -862,6 +972,7 @@ int32_t cmd_handler_installkey(command_t* cmd)
                 ret_val = ERROR_INVALID_ARGUMENT;
                 break;
             }
+
             if(tgt_index >= HAB_KEY_PUBLIC_MAX)
             {
                 log_arg_cmd(TargetIndex, STR_EXCEED_MAX, cmd->type);

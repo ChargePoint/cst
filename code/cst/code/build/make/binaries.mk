@@ -9,7 +9,7 @@
 #
 #             Freescale Semiconductor
 #    (c) Freescale Semiconductor, Inc. 2011-2015 All rights reserved.
-#    Copyright 2018-2019 NXP
+#    Copyright 2018-2020 NXP
 #
 #
 #===============================================================================
@@ -52,9 +52,6 @@ DEPLIST := $(subst .o,.d,$(OBJECTS))
 #===============================================================================
 all: build
 
-# Libraries to be released and where
-LIBRARIES := $(DST)/$(OSTYPE)/lib/$(LIB_FRONTEND)
-
 # Executables to be released and where
 EXECUTABLES := $(DST)/$(OSTYPE)/bin/$(EXE_SRKTOOL)
 EXECUTABLES += $(DST)/$(OSTYPE)/bin/$(EXE_CST)
@@ -63,15 +60,11 @@ ifeq ($(OSTYPE),mingw32)
 EXECUTABLES += $(DST)/keys/$(EXE_CONVLB)
 endif
 
-BUILDS := $(LIBRARIES) $(EXECUTABLES)
+BUILDS := $(EXECUTABLES)
 
 build: $(notdir $(BUILDS))
 
-rel_bin: rel_lib rel_exe
-
-rel_lib: $(notdir $(LIBRARIES))
-	@echo "Copy libraries"
-	$(foreach LIB,$(LIBRARIES),$(CP) $(notdir $(LIB)) $(LIB) ;)
+rel_bin: rel_exe
 
 rel_exe: $(notdir $(EXECUTABLES))
 	@echo "Copy executables"

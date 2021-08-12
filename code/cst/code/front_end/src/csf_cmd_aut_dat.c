@@ -10,7 +10,7 @@
 
               Freescale Semiconductor
         (c) Freescale Semiconductor, Inc. 2011-2015. All rights reserved.
-        Copyright 2018-2019 NXP
+        Copyright 2018-2020 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -90,6 +90,8 @@ static int32_t generate_and_save_aead_data(uint8_t * nonce,
                                     const char * out_file);
 
 int g_no_ca = 0;
+int32_t g_srk_set_hab4 = SRK_SET_OEM;
+int g_dummy_csf_data_generated = 0;
 /*===========================================================================
                           LOCAL FUNCTION DEFINITIONS
 =============================================================================*/
@@ -132,6 +134,15 @@ static int32_t process_authenticatedata_arguments(command_t* cmd,
     uint32_t i;                          /**< Loop index        */
     argument_t *arg = cmd->argument;     /**< Ptr to argument_t */
 
+    bool flag_vfy_idx   = false;
+    bool flag_eng       = false;
+    bool flag_eng_cfg   = false;
+    bool flag_sig_fmt   = false;
+    bool flag_hsh_alg   = false;
+    bool flag_mac       = false;
+    bool flag_fname     = false;
+    bool flag_offset    = false;
+
     for(i=0; i<cmd->argument_count; i++)
     {
         switch((arguments_t)arg->type)
@@ -146,6 +157,7 @@ static int32_t process_authenticatedata_arguments(command_t* cmd,
             }
             break;
         case VerificationIndex:
+            ERR_IF_INIT_MULT_TIMES(flag_vfy_idx);
             if(vfy_index != NULL)
                 *vfy_index = arg->value.number->num_value;
             else
@@ -155,6 +167,7 @@ static int32_t process_authenticatedata_arguments(command_t* cmd,
             }
             break;
         case EngineName:
+            ERR_IF_INIT_MULT_TIMES(flag_eng);
             if(engine != NULL)
                 *engine = arg->value.keyword->unsigned_value;
             else
@@ -164,6 +177,7 @@ static int32_t process_authenticatedata_arguments(command_t* cmd,
             }
             break;
         case EngineConfiguration:
+            ERR_IF_INIT_MULT_TIMES(flag_eng_cfg);
             if(engine_cfg != NULL)
             {
                 /* Engine configuration could be number or keyword */
@@ -179,6 +193,7 @@ static int32_t process_authenticatedata_arguments(command_t* cmd,
             }
             break;
         case SignatureFormat:
+            ERR_IF_INIT_MULT_TIMES(flag_sig_fmt);
             if(sig_format != NULL)
                 *sig_format = arg->value.keyword->unsigned_value;
             else
@@ -188,6 +203,7 @@ static int32_t process_authenticatedata_arguments(command_t* cmd,
             }
             break;
         case HashAlgorithm:
+            ERR_IF_INIT_MULT_TIMES(flag_hsh_alg);
             if(hash_alg != NULL)
                 *hash_alg = arg->value.keyword->unsigned_value;
             else
@@ -197,6 +213,7 @@ static int32_t process_authenticatedata_arguments(command_t* cmd,
             }
             break;
         case MacBytes:
+            ERR_IF_INIT_MULT_TIMES(flag_mac);
             if(mac_bytes != NULL)
             {
                 *mac_bytes = arg->value.number->num_value;
@@ -208,6 +225,7 @@ static int32_t process_authenticatedata_arguments(command_t* cmd,
             }
             break;
         case Filename:
+            ERR_IF_INIT_MULT_TIMES(flag_fname);
             if(src != NULL)
                 *src = arg->value.keyword->string_value;
             else
@@ -217,6 +235,7 @@ static int32_t process_authenticatedata_arguments(command_t* cmd,
             }
             break;
         case Offsets:
+            ERR_IF_INIT_MULT_TIMES(flag_offset);
             if(offsets != NULL)
             {
                 offsets->first  = arg->value.pair->first;
@@ -327,11 +346,20 @@ int32_t cmd_handler_authenticatecsf(command_t* cmd)
     int32_t engine = -1;        /**< Holds engine argument value */
     int32_t engine_cfg = -1;    /**< Holds engine configuration arg value */
 
+    uint32_t csfk_idx = (g_srk_set_hab4 == SRK_SET_OEM) ? HAB_IDX_CSFK : HAB_IDX_CSFK1;
+
+    printf("Authenticate CSF\n");
+
     /* The Authenticate CSF command is invalid when AHAB is targeted */
     if (TGT_AHAB == g_target)
     {
         log_cmd(cmd->type, STR_ILLEGAL);
         return ERROR_INVALID_COMMAND;
+    }
+
+    /* Adjust CSFK index if NOCAK */
+    if ( g_no_ca == 1 ) {
+        csfk_idx = HAB_IDX_CSFK;
     }
 
     /* get the arguments */
@@ -391,7 +419,7 @@ int32_t cmd_handler_authenticatecsf(command_t* cmd)
                 uint8_t aut_csf[] =  {
                     AUT_CSF(HAB_CMD_AUT_DAT_CLR,
                         (SIG_FMT_CMS == sig_format) ? HAB_PCL_CMS : HAB_ALG_PKCS1,
-                        engine, engine_cfg, 0)
+                        engine, engine_cfg, 0, csfk_idx)
                 };                 /**< Macro will output authenticate csf
                                         command bytes in aut_csf buffer */
 
@@ -407,7 +435,7 @@ int32_t cmd_handler_authenticatecsf(command_t* cmd)
          * Dummy signature for now, will be regenerated once csf processing
          * is completed. Required to advance g_csf_buffer_index.
          */
-        ret_val = create_sig_file(FILE_SIG_CSF_DATA, g_key_certs[HAB_IDX_CSFK],
+        ret_val = create_sig_file(FILE_SIG_CSF_DATA, g_key_certs[csfk_idx],
                     (g_hab_version >= HAB4) ? SIG_FMT_CMS : SIG_FMT_PKCS1,
                     g_csf_buffer, HAB_CSF_BYTES_MAX);
         if(ret_val != SUCCESS)
@@ -426,6 +454,12 @@ int32_t cmd_handler_authenticatecsf(command_t* cmd)
             break;
         }
     } while(0);
+
+    /* The initial call to this function is only to generated dummy data as a
+       place holder in the CSF output. Set the global flag to indicate the
+       dummy CSF data has been generated. This is used to prevent the dummy data
+       from being included in the digest data to be sent to an offline signer. */
+    g_dummy_csf_data_generated = 1;
 
     return ret_val;
 }
@@ -554,6 +588,16 @@ int32_t cmd_handler_authenticatedata(command_t* cmd)
     FILE * fh = NULL;            /**< File pointer to open and read block
                                       data from binary files */
 
+    uint32_t srk_idx = (g_srk_set_hab4 == SRK_SET_OEM) ? HAB_IDX_SRK : HAB_IDX_SRK1;
+    uint32_t csfk_idx = (g_srk_set_hab4 == SRK_SET_OEM) ? HAB_IDX_CSFK : HAB_IDX_CSFK1;
+
+    printf("Authenticate data\n");
+
+    /* Adjust CSFK index if NOCAK */
+    if (g_no_ca == 1) {
+        csfk_idx = HAB_IDX_CSFK;
+    }
+
     /* get the arguments */
     if (TGT_AHAB == g_target)
     {
@@ -622,7 +666,7 @@ int32_t cmd_handler_authenticatedata(command_t* cmd)
             if(g_hab_version >= HAB4)
             {
                 /* validate the arguments */
-                if(vfy_index == HAB_IDX_SRK)
+                if(vfy_index == srk_idx)
                 {
                     if (g_no_ca == 0)
                     {
@@ -632,7 +676,15 @@ int32_t cmd_handler_authenticatedata(command_t* cmd)
                         break;
                     }
                 }
-                if(vfy_index == HAB_IDX_CSFK)
+                if(vfy_index == csfk_idx)
+                {
+                    log_arg_cmd(VerificationIndex, NULL, cmd->type);
+
+                    ret_val = ERROR_INVALID_ARGUMENT;
+                    break;
+                }
+                if((vfy_index != VFY_IDX_AUT_DAT_FAST_AUTH) && \
+                   (vfy_index < VFY_IDX_AUT_DAT_MIN || vfy_index > VFY_IDX_AUT_DAT_MAX))
                 {
                     log_arg_cmd(VerificationIndex, NULL, cmd->type);
 
@@ -696,7 +748,7 @@ int32_t cmd_handler_authenticatedata(command_t* cmd)
             }
             else
             {
-                cert_file = g_key_certs[HAB_IDX_CSFK];
+                cert_file = g_key_certs[csfk_idx];
             }
             /* Get the total size for the blocks data and allocate memory */
             offset_in_data = 0;
@@ -1128,7 +1180,7 @@ int32_t cmd_handler_decryptdata(command_t* cmd)
     int32_t engine = -1;           /**< Holds engine argument value */
     int32_t engine_cfg = -1;       /**< Holds engine config argument value */
     int32_t vfy_index = -1;        /**< Holds verify index argument value */
-    int32_t mac_bytes = -1;        /**< Holds MAC length argument value */
+    ssize_t mac_bytes = -1;        /**< Holds MAC length argument value */
     block_t *block = NULL;         /**< Holds address of block list argument */
     block_t *tmpblock = NULL;      /**< Holds address of block list argument */
     size_t blocks_data_size=0;    /**< Bytes occupied by block data in cmd */

@@ -10,7 +10,7 @@
 #
 #              Freescale Semiconductor
 #        (c) Freescale Semiconductor, Inc. 2011. All rights reserved.
-#        Copyright 2018 NXP
+#        Copyright 2018, 2020 NXP
 #
 #
 #==============================================================================
@@ -29,4 +29,5 @@ OBJECTS_SRKTOOL += \
 OBJECTS_FRONTEND += \
     openssl_helper.o \
     srk_helper.o \
+    misc_helper.o \
     err.o

@@ -277,6 +277,48 @@ then
     read srk_ca
 fi
 
+# Check existance of keys/, crts/ and ca/ directories of <cst> before generating keys and
+# switch current working directory to <cst>/keys directory, if needed.
+crt_dir=$(pwd)
+script_name=$(readlink "$0")
+if [ "${script_name}" = "" ]
+then
+	script_name=$0
+fi
+script_path=$(cd $(dirname "${script_name}") && pwd -P)
+keys_dir=${script_path}/../keys/
+crts_dir=${script_path}/../crts/
+ca_dir=${script_path}/../ca/
+
+if [ ! -d "${keys_dir}" ]
+then
+    echo ERROR: "Private keys directory ${keys_dir} is missing. Expecting script to be located inside <cst>/keys directory."
+    exit 1
+fi
+
+if [ ! -d "${crts_dir}" ]
+then
+    echo ERROR: "Public keys directory ${crts_dir} is missing. Expecting <cst>/crts directory to be already created."
+    exit 1 
+fi
+
+if [ ! -d "${ca_dir}" ]
+then
+    echo ERROR: "Openssl configuration directory ${ca_dir} is missing. Expecting <cst>/ca directory to hold openssl configuration files."
+    exit 1 
+fi
+
+# Switch current working directory to keys directory, if needed.
+if [ "${crt_dir}" != "${keys_dir}" ]
+then
+    cd "${keys_dir}" 
+    if [ $? -ge 1 ]
+    then
+        echo ERROR: "Cannot change directory to ${keys_dir}"
+        exit 1
+    fi 
+fi
+
 # Check that the file "serial" is present, if not create it:
 if [ ! -f serial ]
 then
@@ -570,5 +612,16 @@ do
 
     i=$((i+1))
 done
+fi
+
+# Switch back to initial working directory, if needed.
+if [ "${crt_dir}" != "${keys_dir}" ]
+then
+    cd "${crt_dir}" 
+    if [ $? -ge 1 ]
+    then
+        echo ERROR: "Cannot change directory to ${crt_dir}"
+        exit 1
+    fi
 fi
 exit 0

@@ -10,7 +10,7 @@
 
               Freescale Semiconductor
         (c) Freescale Semiconductor, Inc. 2011,2012. All rights reserved.
-        Copyright 2018 NXP
+        Copyright 2018, 2020 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -66,20 +66,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define BYTES_IN_WORD             4    /**< Number of bytes in a word */
 
-#define ERR_IF_INIT_MULT_TIMES(flag)                                     \
-    if (flag)                                                            \
-    {                                                                    \
-        log_arg_cmd(arg->type, " argument already specified", cmd->type);\
-        return ERROR_INVALID_ARGUMENT;                                   \
-    }                                                                    \
-    flag = true
-
-#define ERR_IF_UNS_ARG(flag, arg)                                        \
-        if (flag)                                                        \
-        {                                                                \
-            log_arg_cmd(arg, STR_ILLEGAL, cmd->type);                    \
-            return ERROR_UNSUPPORTED_ARGUMENT;                           \
-        }
 /*===========================================================================
                              LOCAL FUNCTION DECLARATION
 =============================================================================*/
@@ -118,11 +104,16 @@ static int32_t process_setengine_arguments(command_t* cmd, int32_t *engine,
     uint32_t i;
     argument_t *arg = cmd->argument;     /**< Ptr to argument_t */
 
+    bool flag_eng       = false;
+    bool flag_eng_cfg   = false;
+    bool flag_hsh_alg   = false;
+
     for(i=0; i<cmd->argument_count; i++)
     {
         switch((arguments_t)arg->type)
         {
         case EngineName:
+            ERR_IF_INIT_MULT_TIMES(flag_eng);
             if(engine != NULL)
                 *engine = arg->value.keyword->unsigned_value;
             else
@@ -132,6 +123,7 @@ static int32_t process_setengine_arguments(command_t* cmd, int32_t *engine,
             }
             break;
         case EngineConfiguration:
+            ERR_IF_INIT_MULT_TIMES(flag_eng_cfg);
             if(engine_cfg != NULL)
             {
                 /* Engine configuration could be number or keyword */
@@ -147,6 +139,7 @@ static int32_t process_setengine_arguments(command_t* cmd, int32_t *engine,
             }
             break;
         case HashAlgorithm:
+            ERR_IF_INIT_MULT_TIMES(flag_hsh_alg);
             if(hash_alg != NULL)
                 *hash_alg = arg->value.keyword->unsigned_value;
             else
@@ -287,8 +280,6 @@ int32_t cmd_handler_header(command_t* cmd)
             g_csf_buffer[CSF_HDR_HAB4_TAG_OFFSET] = HAB_TAG_CSF;
             g_csf_buffer[CSF_HDR_HAB4_VERSION_OFFSET] = g_hab_version;
         }
-
-        ERR_IF_UNS_ARG(flag_mode, Mode);
 
         if (g_engine == HAB_ENG_ANY && g_engine_config != 0)
         {
@@ -488,11 +479,17 @@ static int32_t cmd_handler_init_unlock(command_t* cmd, uint8_t hab_cmd_id)
     int32_t engine = -1;       /**< Holds the value of engine argument */
     keyword_t *feature = NULL; /**< Holds features list argument */
     int32_t num_features = 0;  /**< Count of features in the argument */
+    number_t *feature_num = NULL; /**< Holds numeric features list argument */
+    int32_t feature_type = 0;  /**< Type of features in the argument */
     number_t *uid = NULL;      /**< Holds UID argument */
     int32_t uid_bytes = 0;     /**< Length of UID in bytes */
     argument_t *arg;           /**< Ptr to command's argument */
     int32_t cmd_len;           /**< Used to keep track of cmd length */
     uint32_t features = 0;     /**< All features are OR'ed into this word */
+
+    bool flag_eng      = false;
+    bool flag_feature  = false;
+    bool flag_uid      = false;
 
     arg = cmd->argument;
 
@@ -501,13 +498,24 @@ static int32_t cmd_handler_init_unlock(command_t* cmd, uint8_t hab_cmd_id)
         switch((arguments_t)arg->type)
         {
         case EngineName:
+            ERR_IF_INIT_MULT_TIMES(flag_eng);
             engine = arg->value.keyword->unsigned_value;
+            /* Validate if only 1 Engine is specified */
+            if(arg->value_count > 1)
+            {
+                log_arg_cmd(arg->type, " must have only 1 Engine", cmd->type);
+                return ERROR_INVALID_ARGUMENT;
+            }
             break;
         case Features:
+            ERR_IF_INIT_MULT_TIMES(flag_feature);
             feature = arg->value.keyword;
+            feature_num = arg->value.number;
             num_features = arg->value_count;
+            feature_type = arg->value_type;
             break;
         case UID:
+            ERR_IF_INIT_MULT_TIMES(flag_uid);
             uid = arg->value.number;
             uid_bytes = arg->value_count;
             break;
@@ -525,10 +533,54 @@ static int32_t cmd_handler_init_unlock(command_t* cmd, uint8_t hab_cmd_id)
     }
 
     /* OR'ed all feature values in features */
-    while(feature != NULL)
+    while(feature != NULL && feature_num != NULL)
     {
-        features |= feature->unsigned_value;
-        feature = feature->next;
+        if(feature->string_value != NULL && feature_type == KEYWORD_TYPE)
+        {
+            switch(engine)
+            {
+                case HAB_ENG_SRTC:
+                    log_arg_cmd(Features, NULL, cmd->type);
+                    return ERROR_INVALID_ARGUMENT;
+                case HAB_ENG_CAAM:
+                    if(!(strncmp(feature->string_value, "MID", 3) == 0 ||
+                         strncmp(feature->string_value, "RNG", 3) == 0 ||
+                         strncmp(feature->string_value, "MFG", 3) == 0 ))
+                    {
+                        log_arg_cmd(Features, " invalid for the specified engine", cmd->type);
+                        return ERROR_INVALID_ARGUMENT;
+                    }
+                    break;
+                case HAB_ENG_SNVS:
+                    if(!(strncmp(feature->string_value, "LPSWR", 5) == 0 ||
+                         strncmp(feature->string_value, "ZMKWRITE", 8) == 0 ))
+                    {
+                        log_arg_cmd(Features, " invalid for the specified engine", cmd->type);
+                        return ERROR_INVALID_ARGUMENT;
+                    }
+                    break;
+                case HAB_ENG_OCOTP:
+                    if(!(strncmp(feature->string_value, "FIELDRETURN", 11) == 0 ||
+                         strncmp(feature->string_value, "SRKREVOKE", 9) == 0 ||
+                         strncmp(feature->string_value, "SCS", 3) == 0 ||
+                         strncmp(feature->string_value, "JTAG", 4) == 0 ))
+                    {
+                        log_arg_cmd(Features, " invalid for the specified engine", cmd->type);
+                        return ERROR_INVALID_ARGUMENT;
+                    }
+                    break;
+                default:
+                    log_arg_cmd(EngineName, NULL, cmd->type);
+                    return ERROR_INVALID_ARGUMENT;
+            }
+            features |= feature->unsigned_value;
+            feature = feature->next;
+        }
+        else if(feature_type == NUMBER_TYPE)
+        {
+            features |= feature_num->num_value;
+            feature_num = feature_num->next;
+        }
     }
 
     /* Set flags if this is Unlock RNG or Init RNG command */

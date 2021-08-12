@@ -30,7 +30,7 @@
 %%
 
 [a-z][a-z0-9]*          yylval.str=strdup(yytext);return WORD;
-\"[a-zA-Z0-9\/\\._-]+\" { /* strip off quotes */
+\".*\"                  { /* strip off quotes */
                         yytext++;
                         yytext[strlen(yytext) - 1] = 0;
                         /*

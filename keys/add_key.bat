@@ -17,6 +17,7 @@
 ::-----------------------------------------------------------------------------
 
 set scriptName=%0
+set scriptPath=%~dp0
 set numArgs=0
 for %%x in (%*) do set /A numArgs+=1
 
@@ -239,7 +240,7 @@ if %interactive%==y (
 	set /P signing_key="Enter CA signing key name: "
 	set /P signing_crt="Enter CA signing certificate name: "
 )
-goto GEN_OUTPUTS
+goto BEFORE_GEN_KEYS
 
 :GEN_CSF_IMG_SGK
 if %ver%==a goto GEN_SGK
@@ -250,14 +251,50 @@ if %interactive%==y (
 	set /P signing_key="Enter SRK signing key name: "
 	set /P signing_crt="Enter SRK signing certificate name: "
 )
-goto GEN_OUTPUTS
+goto BEFORE_GEN_KEYS
 
 :GEN_SGK
 :: ---------------- Add SGK key and certificate -------------------
 set ca="usr"
 set /P signing_key="Enter SRK signing key name: "
 set /P signing_crt="Enter SRK signing certificate name: "
-goto GEN_OUTPUTS
+goto BEFORE_GEN_KEYS
+
+:BEFORE_GEN_KEYS
+:: Check existance of keys/, crts/ and ca/ directories of <cst> before generating keys and
+:: switch current working directory to <cst>/keys directory, if needed.
+set crt_dir=%cd%
+set keys_dir=%scriptPath%\\..\\keys\\
+set crts_dir=%scriptPath%\\..\\crts\\
+set ca_dir=%scriptPath%\\..\\ca\\
+
+if not exist "%keys_dir%" (
+    echo ERROR: Private keys directory %keys_dir% is missing. Expecting script to be located inside ^<cst^>/keys directory.
+    exit /B
+)
+
+if not exist "%crts_dir%" (
+    echo ERROR: Public keys directory %crts_dir% is missing. Expecting ^<cst^>/crts directory to be already created.
+    exit /B
+)
+
+if not exist "%ca_dir%" (
+    echo ERROR: Openssl configuration directory %ca_dir% is missing. Expecting ^<cst^>/ca directory to hold openssl configuration files.
+    exit /B
+)
+
+:: Switch current working directory to <cst>/keys directory, if needed.
+if not "%crt_dir%" == "%keys_dir%" (
+    cd "%keys_dir%" 
+    if %errorlevel% NEQ 0 (
+        echo ERROR: Cannot change directory to %keys_dir%
+        exit /B
+    )
+)
+
+:OPENSSL_INIT
+:: The following is required otherwise OpenSSL complains
+set OPENSSL_CONF=..\\ca\\openssl.cnf
 
 :GEN_OUTPUTS
 :: ---------------- Generate outputs ------------------------------
@@ -319,4 +356,14 @@ ren %key_fullname%_key_tmp.pem %key_fullname%_key.pem
 :CLEAN
 :: Clean up
 del /F *_req.pem
+
+:DONE
+:: Switch back to initial working directory, if needed.
+if not "%crt_dir%" == "%keys_dir%" (
+    cd "%crt_dir%" 
+    if %errorlevel% NEQ 0 (
+        echo ERROR: Cannot change directory to %crt_dir%
+        exit /B
+    )
+)
 exit /B

@@ -129,7 +129,7 @@ static inline struct ahab_container_image_s *
 get_ahab_image_array(struct ahab_container_header_s *header)
 {
     return (struct ahab_container_image_s *)(uintptr_t)
-           ((uint32_t)(uintptr_t) header + sizeof(struct ahab_container_header_s));
+           ((uintptr_t) header + sizeof(struct ahab_container_header_s));
 }
 
 #define HEADER_FLAGS_SRK_SET_SHIFT  0

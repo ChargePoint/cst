@@ -9,7 +9,7 @@
 #
 #             Freescale Semiconductor
 #    (c) Freescale Semiconductor, Inc. 2011-2015. All rights reserved.
-#    Copyright 2018 NXP
+#    Copyright 2018, 2020 NXP
 #
 #
 #==============================================================================
@@ -17,7 +17,7 @@
 # Define -mno-ms-bitfields to get correct bit-field layout of packed structs
 EXTRACFLAGS += -mno-ms-bitfields
 
-ifneq ($(ENCRYPTION), yes)
+ifeq ($(ENCRYPTION), no)
 	CDEFINES := -DREMOVE_ENCRYPTION -DUSE_APPLINK
 endif
 

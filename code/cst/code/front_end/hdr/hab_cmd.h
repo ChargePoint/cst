@@ -273,6 +273,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define INS_KEY_BASE_BYTES 12
 
+#if 0
 /*
  *    Install Key (SRK)
  */
@@ -294,6 +295,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
             (crt))
 
 #define INS_CSFK_BYTES INS_KEY_BASE_BYTES
+#endif
 
 /*
  *    Install Key (IMGK - no hash)
@@ -356,9 +358,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *    Authenticate Data (CSF)
  */
 
-#define AUT_CSF(flg, pcl, eng, cfg, sig_start)  \
+#define AUT_CSF(flg, pcl, eng, cfg, sig_start, csfk_idx)  \
     AUT_DAT(AUT_CSF_BYTES, (flg),               \
-            HAB_IDX_CSFK, (pcl), (eng), (cfg),  \
+            (csfk_idx), (pcl), (eng), (cfg),    \
             (sig_start))
 
 #define AUT_CSF_BYTES AUT_DAT_BASE_BYTES

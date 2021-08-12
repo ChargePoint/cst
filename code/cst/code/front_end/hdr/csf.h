@@ -11,7 +11,7 @@
 
               Freescale Semiconductor
         (c) Freescale Semiconductor, Inc. 2011-2015 All rights reserved.
-        Copyright 2018-2019 NXP
+        Copyright 2018-2020 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -108,6 +108,34 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /**< Max. nonce bytes in 16B AES blk */
 #define MAX_NONCE_BYTES             (13)
 
+/** Min and Max key indexes for source/verification/target indexes */
+#define VFY_IDX_INS_KEY_SRK		(0)
+#define VFY_IDX_INS_KEY_MIN		(2)
+#define VFY_IDX_INS_KEY_MAX		(4)
+#define SRC_IDX_INS_KEY_MIN		(0)
+#define SRC_IDX_INS_KEY_MAX		(3)
+#define VFY_IDX_AUT_DAT_FAST_AUTH	(0)
+#define VFY_IDX_AUT_DAT_MIN		(2)
+#define VFY_IDX_AUT_DAT_MAX		(5)
+
+/** SRK Table offsets */
+#define SRK_TABLE_TAG_OFFSET		0
+#define SRK_TABLE_VER_OFFSET		3
+
+#define ERR_IF_INIT_MULT_TIMES(flag)                                     \
+    if (flag)                                                            \
+    {                                                                    \
+        log_arg_cmd(arg->type, " argument already specified", cmd->type);\
+        return ERROR_INVALID_ARGUMENT;                                   \
+    }                                                                    \
+    flag = true
+
+#define ERR_IF_UNS_ARG(flag, arg)                                        \
+        if (flag)                                                        \
+        {                                                                \
+            log_arg_cmd(arg, STR_ILLEGAL, cmd->type);                    \
+            return ERROR_UNSUPPORTED_ARGUMENT;                           \
+        }
 /*===========================================================================
                               TYPEDEFS
 =============================================================================*/
@@ -384,7 +412,7 @@ extern int32_t append_uid_to_buffer(number_t *uid, uint8_t *buf,
 /* Creates signature data file for the given data */
 extern int32_t create_sig_file(char *file, char *cert_file,
         sig_fmt_t sig_fmt, uint8_t *data,
-        uint32_t data_size);
+        size_t data_size);
 
 /* Called by parser on each command */
 extern int32_t handle_command(command_t *cmd);

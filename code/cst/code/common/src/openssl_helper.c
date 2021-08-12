@@ -349,36 +349,6 @@ read_certificate(const char* filename)
     return cert;
 }
 
-/*--------------------------------
-  get_der_encoded_certificate_data
-----------------------------------*/
-int32_t get_der_encoded_certificate_data(const char* filename,
-                                         uint8_t ** der)
-{
-    /** Used for returning either size of der data or 0 to indicate an error */
-    int32_t ret_val = 0;
-
-    /* Read X509 certificate data from cert file */
-    X509 *cert = read_certificate(filename);
-
-    if (cert != NULL)
-    {
-        /* i2d_X509() allocates memory for der data, converts the X509
-         * cert structure to binary der formatted data.  It then
-         * returns the address of the memory allocated for the der data
-         */
-        ret_val = i2d_X509(cert, der);
-
-        /* On error return 0 */
-        if (ret_val < 0)
-        {
-            ret_val = 0;
-        }
-        X509_free(cert);
-    }
-    return ret_val;
-}
-
 /*--------------------------
   read_private_key
 ---------------------------*/
