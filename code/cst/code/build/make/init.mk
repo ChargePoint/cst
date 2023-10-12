@@ -9,7 +9,7 @@
 #
 #             Freescale Semiconductor
 #    (c) Freescale Semiconductor, Inc. 2011-2015. All rights reserved.
-#    Copyright 2018-2019 NXP
+#    Copyright 2018-2019, 2022 NXP
 #
 #
 #==============================================================================
@@ -17,7 +17,7 @@
 # Define subsystems and source location
 #==============================================================================
 CST_CODE_PATH := $(ROOTPATH)/code
-SUBSYS        := common back_end srktool front_end convlb
+SUBSYS        := common back_end-ssl back_end-pkcs11 srktool front_end convlb
 VPATH         := $(SUBSYS:%=$(CST_CODE_PATH)/%/src)
 
 # Common commands

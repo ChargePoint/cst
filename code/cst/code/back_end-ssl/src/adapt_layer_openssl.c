@@ -12,7 +12,7 @@
 
               Freescale Semiconductor
         (c) Freescale Semiconductor, Inc. 2011-2015. All rights reserved.
-        Copyright 2018, 2020 NXP
+        Copyright 2018, 2020, 2022 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -47,6 +47,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <strings.h>
 #include "ssl_wrapper.h"
 #include <string.h>
 #include <openssl/bio.h>
@@ -59,6 +60,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <openssl/crypto.h>
 #include <openssl/rsa.h>
 #include "adapt_layer.h"
+#include "ssl_backend.h"
 #include "openssl_helper.h"
 #include "pkey.h"
 #include "csf.h"
@@ -258,7 +260,6 @@ display_error(const char *err);
 /*===========================================================================
                                GLOBAL VARIABLES
 =============================================================================*/
-extern int g_dummy_csf_data_generated;
 
 /*===========================================================================
                                LOCAL FUNCTIONS
@@ -354,6 +355,105 @@ gen_sig_data_raw(const char *in_file,
     if (rsa) RSA_free(rsa);
     if (rsa_in) OPENSSL_free(rsa_in);
     if (rsa_out) OPENSSL_free(rsa_out);
+    return err_value;
+}
+
+/*--------------------------
+  gen_sig_data_pss
+---------------------------*/
+int32_t
+gen_sig_data_pss(const char *in_file,
+                 const char *key_file,
+                 hash_alg_t hash_alg,
+                 uint8_t *sig_buf,
+                 int32_t *sig_buf_bytes)
+{
+    const EVP_MD *md = EVP_get_digestbyname(get_digest_name(hash_alg));
+    EVP_PKEY *key = NULL; /**< Ptr to read key data */
+    RSA *rsa = NULL; /**< Ptr to rsa of key data */
+    uint8_t *hash_msg = NULL; /**< Mem ptr for hash data of in_file */
+    int32_t hash_msg_size; /**< Holds the length of hash_msg buf */
+    uint8_t *enc_sig = NULL; /**< Mem ptr for encrypted signature */
+    size_t enc_sig_size; /**< Holds the length of encrypted signature buf */
+    uint8_t *em = NULL; /**< Mem ptr for encoded message */
+    size_t em_size; /**< Holds the length of encoded message */
+    char err_str[MAX_ERR_STR_BYTES]; /**< Array to hold error string */
+    int32_t err_value = CAL_CRYPTO_API_ERROR; /**< Holds the return error value */
+
+    do
+    {
+        /* Read key */
+        key = read_private_key(key_file,
+                           (pem_password_cb *)get_passcode_to_key_file,
+                           key_file);
+        if (!key) {
+            snprintf(err_str, MAX_ERR_STR_BYTES-1,
+                     "Cannot open key file %s", key_file);
+            display_error(err_str);
+            break;
+        }
+
+        /* Get RSA key */
+        rsa = EVP_PKEY_get1_RSA(key);
+        EVP_PKEY_free(key);
+
+        hash_msg_size = HASH_BYTES_MAX;
+        hash_msg = OPENSSL_malloc(HASH_BYTES_MAX);
+        if (hash_msg == NULL) {
+          err_value = CAL_CRYPTO_API_ERROR;
+          break;
+        }
+
+        /* Generate hash data of data from in_file */
+        err_value = calculate_hash(in_file, hash_alg, hash_msg, &hash_msg_size);
+        if (err_value != CAL_SUCCESS) {
+            break;
+        }
+
+        em_size = RSA_size(rsa);
+        em = OPENSSL_malloc(em_size);
+        if (em == NULL) {
+          err_value = CAL_CRYPTO_API_ERROR;
+          break;
+        }
+
+        /* Create encoded RSA PSS message */
+        if (RSA_padding_add_PKCS1_PSS(rsa, em, hash_msg, md, -1) != 1) {
+            snprintf(err_str, MAX_ERR_STR_BYTES-1,
+                     "Cannot create EM %s", key_file);
+            display_error(err_str);
+            err_value = CAL_CRYPTO_API_ERROR;
+            break;
+        }
+
+        enc_sig_size = em_size;
+        enc_sig = OPENSSL_malloc(enc_sig_size);
+
+        /* Create RSA PSS signature */
+        if (RSA_private_encrypt(enc_sig_size, em, enc_sig, rsa, RSA_NO_PADDING) == -1) {
+            snprintf(err_str, MAX_ERR_STR_BYTES-1,
+                     "Cannot create signature %s", key_file);
+            display_error(err_str);
+            err_value = CAL_CRYPTO_API_ERROR;
+            break;
+        }
+
+        if (enc_sig_size > *sig_buf_bytes) {
+            snprintf(err_str, MAX_ERR_STR_BYTES-1,
+                     "Generated signature too large for allocated buffer %s", key_file);
+            display_error(err_str);
+            err_value = CAL_INVALID_SIG_DATA_SIZE;
+            break;
+        }
+        *sig_buf_bytes = enc_sig_size;
+        memcpy(sig_buf, enc_sig, enc_sig_size);
+
+    } while(0);
+
+    if (rsa) RSA_free(rsa);
+    if (hash_msg) OPENSSL_free(hash_msg);
+    if (em) OPENSSL_free(em);
+    if (enc_sig) OPENSSL_free(enc_sig);
     return err_value;
 }
 
@@ -690,77 +790,66 @@ export_habv4_signature_request(const char *in_file,
 {
     FILE *sig_req_fp = NULL;
     int unique_ident[2];
+    FILE *in_file_fp = NULL;
+    FILE *cpy_data_fp = NULL;
+    char tmp_filename[80];
+    int in_data_size = 0;
 
-    if(g_dummy_csf_data_generated == 1)
+    /* Seed rand() to generate unique data tags */
+    srand(time(0));
+
+    /* Open data file */
+    if(!(in_file_fp = fopen(in_file, "rb")))
     {
-        FILE *in_file_fp = NULL;
-        FILE *cpy_data_fp = NULL;
-        char tmp_filename[80];
-        int in_data_size = 0;
-
-        /* Open data file */
-        if(!(in_file_fp = fopen(in_file, "rb")))
-        {
-            printf("Unable to open tmp data file\n");
-            return -1;
-        }
-
-        /* Determine the data file size */
-        if(fseek(in_file_fp,0L,SEEK_END) == -1)
-        {
-            printf("Unable to get in_data filesize\n");
-            fclose(in_file_fp);
-            return -1;
-        }
-        if ((in_data_size = ftell(in_file_fp)) < 0) {
-            printf("Unable to get in_data filesize\n");
-            fclose(in_file_fp);
-            return -1;
-        }
-
-        /* Set the fp to the beginning of the data file */
-        rewind(in_file_fp);
-
-        /* Create the output data file name */
-        strcpy(tmp_filename,"data_");
-        strcat(tmp_filename,in_file);
-
-        /* Copy the data file to the output data file */
-        cpy_data_fp = fopen(tmp_filename, "w");
-
-        while (in_data_size--)
-        {
-            char tmp;
-            tmp = fgetc(in_file_fp);  // copying file character by character
-            fputc(tmp, cpy_data_fp);
-        }
-
-        /* Create unique identifier */
-        unique_ident[0] = rand();
-        unique_ident[1] = rand();
-
-        /* Add entry to signing request file for new data file */
-        sig_req_fp = fopen("sig_request.txt", "a");
-        fseek(sig_req_fp, 0L, SEEK_END);
-        fprintf(sig_req_fp,"Signing Request:\n");
-        fprintf(sig_req_fp,"%s\n", cert_file);
-        fprintf(sig_req_fp,"%s\n", tmp_filename);
-        fprintf(sig_req_fp,"unique tag: %08x%08x\n",unique_ident[1], unique_ident[0]);
-
-        /* Close all files */
-        fclose(in_file_fp);
-        fclose(cpy_data_fp);
-        fclose(sig_req_fp);
-    } else {
-        /* Seed rand() to generate unique data tags on the next pass */
-        srand(time(0));
-
-        /* Ensure any data in the digest file is cleared. */
-        if((sig_req_fp = fopen("sig_request.txt", "w")))
-        {
-            fclose(sig_req_fp);
-        }
+      printf("Unable to open tmp data file\n");
+      return -1;
     }
+
+    /* Determine the data file size */
+    if(fseek(in_file_fp,0L,SEEK_END) == -1)
+    {
+      printf("Unable to get in_data filesize\n");
+      fclose(in_file_fp);
+      return -1;
+    }
+    if ((in_data_size = ftell(in_file_fp)) < 0) {
+      printf("Unable to get in_data filesize\n");
+      fclose(in_file_fp);
+      return -1;
+    }
+
+    /* Set the fp to the beginning of the data file */
+    rewind(in_file_fp);
+
+    /* Create the output data file name */
+    strcpy(tmp_filename,"data_");
+    strcat(tmp_filename,in_file);
+
+    /* Copy the data file to the output data file */
+    cpy_data_fp = fopen(tmp_filename, "w");
+
+    while (in_data_size--)
+    {
+      char tmp;
+      tmp = fgetc(in_file_fp);  // copying file character by character
+      fputc(tmp, cpy_data_fp);
+    }
+
+    /* Create unique identifier */
+    unique_ident[0] = rand();
+    unique_ident[1] = rand();
+
+    /* Add entry to signing request file for new data file */
+    sig_req_fp = fopen("sig_request.txt", "a");
+    fseek(sig_req_fp, 0L, SEEK_END);
+    fprintf(sig_req_fp,"Signing Request:\n");
+    fprintf(sig_req_fp,"%s\n", tmp_filename);
+    fprintf(sig_req_fp,"unique tag: %08x%08x\n",unique_ident[1], unique_ident[0]);
+
+    /* Close all files */
+    fclose(in_file_fp);
+    fclose(cpy_data_fp);
+    fclose(sig_req_fp);
 
     *sig_buf_bytes = calculate_sig_buf_size(cert_file);
 
@@ -816,9 +905,9 @@ int32_t export_signature_request(const char *in_file,
 =============================================================================*/
 
 /*--------------------------
-  gen_sig_data
+  ssl_gen_sig_data
 ---------------------------*/
-int32_t gen_sig_data(const char* in_file,
+int32_t ssl_gen_sig_data(const char* in_file,
                      const char* cert_file,
                      hash_alg_t hash_alg,
                      sig_fmt_t sig_fmt,
@@ -857,6 +946,10 @@ int32_t gen_sig_data(const char* in_file,
         err = gen_sig_data_raw(in_file, key_file,
                                hash_alg, sig_buf, (int32_t *)sig_buf_bytes);
     }
+    else if (SIG_FMT_RSA_PSS == sig_fmt) {
+        err = gen_sig_data_pss(in_file, key_file,
+                               hash_alg, sig_buf, (int32_t *)sig_buf_bytes);
+    }
     else if (SIG_FMT_CMS == sig_fmt) {
         err = gen_sig_data_cms(in_file, cert_file, key_file,
                                hash_alg, sig_buf, sig_buf_bytes);
@@ -873,36 +966,6 @@ int32_t gen_sig_data(const char* in_file,
 
     free(key_file);
     return err;
-}
-
-/*--------------------------------
-  get_der_encoded_certificate_data
-----------------------------------*/
-int32_t get_der_encoded_certificate_data(const char* reference,
-                                         uint8_t ** der)
-{
-    /** Used for returning either size of der data or 0 to indicate an error */
-    int32_t ret_val = 0;
-
-    /* Read X509 certificate data from cert file */
-    X509 *cert = read_certificate(reference);
-
-    if (cert != NULL)
-    {
-        /* i2d_X509() allocates memory for der data, converts the X509
-         * cert structure to binary der formatted data.  It then
-         * returns the address of the memory allocated for the der data
-         */
-        ret_val = i2d_X509(cert, der);
-
-        /* On error return 0 */
-        if (ret_val < 0)
-        {
-            ret_val = 0;
-        }
-        X509_free(cert);
-    }
-    return ret_val;
 }
 
 /*--------------------------
@@ -1125,19 +1188,41 @@ int32_t gen_auth_encrypted_data(const char* in_file,
 #ifdef DEBUG
     int32_t i;                                        /**< used in for loops */
 #endif
+    uint8_t nonce_temp[nonce_bytes];
+    int32_t j = 1;
 
     do {
         if (AES_CCM == aead_alg) { /* HAB4 */
-            /* Generate Nonce */
-            err_value = gen_random_bytes((uint8_t*)nonce, nonce_bytes);
-            if (err_value != CAL_SUCCESS) {
-                snprintf(err_str, MAX_ERR_STR_BYTES-1,
-                            "Failed to get nonce");
-                display_error(err_str);
-                err_value = CAL_CRYPTO_API_ERROR;
-                break;
-            }
+            /* Test random byte generation twice for functional confirmation */
+            do {
+                /* Generate Nonce */
+                err_value = gen_random_bytes((uint8_t*)nonce, nonce_bytes);
+                if (err_value != CAL_SUCCESS) {
+                    snprintf(err_str, MAX_ERR_STR_BYTES-1,
+                                "Failed to get nonce");
+                    display_error(err_str);
+                    err_value = CAL_CRYPTO_API_ERROR;
+                    break;
+                }
+                /* Copy nonce in temp variable to compare in next iteration */
+                if (1 == j) {
+                    memcpy(&nonce_temp, nonce, nonce_bytes);
+                }
+                else {
+                    /* If random numbers in two iterations are equal, throw an error */
+                    if (!memcmp(&nonce_temp, nonce, nonce_bytes)) {
+                        snprintf(err_str, MAX_ERR_STR_BYTES-1,
+                                    "Invalid nonce generated");
+                        display_error(err_str);
+                        err_value = CAL_CRYPTO_API_ERROR;
+                        break;
+                    }
+                }
+            } while (j--);
         }
+        /* Exit this loop if error encountered in random bytes generation */
+        if (err_value != CAL_SUCCESS)
+            break;
 #ifdef DEBUG
         printf("nonce bytes: ");
         for(i=0; i<nonce_bytes; i++) {

@@ -7,7 +7,7 @@
 @verbatim
 =============================================================================
 
-    Copyright 2020 NXP
+    Copyright 2020, 2023 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -60,7 +60,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /*===========================================================================
                             LOCAL VARIABLES
 =============================================================================*/
-char err_msg[MAX_ERR_MSG_BYTES];
+static char err_msg[MAX_ERR_MSG_BYTES];
 
 /*===========================================================================
                             LOCAL FUNCTION PROTOTYPES

@@ -11,7 +11,7 @@
 
               Freescale Semiconductor
     (c) Freescale Semiconductor, Inc. 2011, 2012, 2013 All rights reserved.
-    Copyright 2018,2020 NXP
+    Copyright 2018, 2020, 2022-2023 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -59,7 +59,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 #include "err.h"
 #include "srk_helper.h"
-
+#include "adapt_layer.h"
+#include "ssl_backend.h"
+#include "pkcs11_backend.h"
 /*===========================================================================
                                LOCAL CONSTANTS
 =============================================================================*/
@@ -464,6 +466,8 @@ uint32_t  g_index_to_table_data = SRK_TABLE_HEADER_BYTES;
 /** global variable for versbose output **/
 bool g_verbose = FALSE;
 
+read_certificate_fptr read_certificate = ssl_read_certificate;
+
 /*===========================================================================
                                LOCAL FUNCTIONS
 =============================================================================*/
@@ -718,6 +722,14 @@ generate_srk_data(tgt_t target,
 
         /* Get public key  */
         pkey = X509_get_pubkey(cert);
+        if (pkey == NULL)
+        {
+            snprintf(tmp_str,
+                    MAX_STRING_BYTES,
+                    "Error! Failed to get public key from %s\n",
+                    certs[i].filename);
+            error(tmp_str);
+        }
 
         /* Determine if cert has the CA flag set */
         if (X509_check_ca(cert) == X509_CA_CERT)
@@ -729,7 +741,7 @@ generate_srk_data(tgt_t target,
             ca_flag[i] = FALSE;
         }
 
-        if (EVP_PKEY_id(pkey) == EVP_PKEY_RSA)
+        if ((EVP_PKEY_id(pkey) == EVP_PKEY_RSA) || (EVP_PKEY_id(pkey) == EVP_PKEY_RSA_PSS))
         {
             srk_entry_pkcs1(target, pkey, &srk, ca_flag[i], sd_alg_str);
         }
@@ -877,7 +889,7 @@ check_digest_alg(tgt_t target, const char *alg_str)
             break;
 
         case TGT_AHAB:
-            if (algorithm != HAB_ALG_SHA512)
+            if ((algorithm != HAB_ALG_SHA512) && (algorithm != HAB_ALG_SHA256))
             {
                 error("Unsupported message digest algorithm");
                 print_usage();
@@ -921,6 +933,11 @@ check_hab_cert_filenames(hab_version_t version,
     uint32_t num_certs = 0;
     uint32_t i;
 
+    if (cert_str == NULL || strlen(cert_str) == 0)
+    {
+        print_usage();
+        error("Missing certificates");
+    }
 
     /* Initialize cert filename array */
     max_certs = MAX_CERTIFICATES_ALLOWED;
@@ -970,6 +987,12 @@ check_ahab_cert_filenames(const char *cert_str,
     uint32_t num_certs = 0;
     uint32_t i;
 
+    if (cert_str == NULL || strlen(cert_str) == 0)
+    {
+        print_usage();
+        error("Missing certificates");
+    }
+
     /* Initialize cert filename array */
     for (i = 0; i < max_certs; i++)
     {
@@ -1017,6 +1040,10 @@ void print_usage(void)
     printf("  -e, --efuses <efusefile>:\n");
     printf("      Filename for the output SRK efuse binary file containing ");
     printf("the SRK table\n      hash\n\n");
+    printf("  -d, --digest <digestalg>:\n");
+    printf("      Message Digest algorithm.\n");
+    printf("          - sha512 (default): Supported in 8/8x devices \n");
+    printf("          - sha256: Supported in 8ULP \n\n");
     printf("  -s, --sign_digest <digestalg>:\n");
     printf("      Signature Digest algorithm. Either sha256, sha384 or ");
     printf("sha512\n\n");

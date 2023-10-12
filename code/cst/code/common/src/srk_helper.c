@@ -8,7 +8,7 @@
 @verbatim
 =============================================================================
 
-    Copyright 2018-2019 NXP
+    Copyright 2018-2019, 2022 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -82,6 +82,7 @@ srk_entry_pkcs1(tgt_t target,
     size_t mod_bytes; /**< Modulus size in bytes */
     size_t exp_bytes; /**< Exponent size in bytes */
     const BIGNUM *n, *e; /**< modulus and exponent defined as OpenSSL BIGNUM */
+    int crypto_algo = HAB_ALG_PKCS1;
 
     RSA_get0_key(EVP_PKEY_get0_RSA(pkey), &n, &e, NULL);
 
@@ -109,13 +110,18 @@ srk_entry_pkcs1(tgt_t target,
 
     srk->entry_bytes = SRK_KEY_HEADER_BYTES + mod_bytes + exp_bytes;
 
+    /* Determine if the algorithm is rsa-pss */
+    if (EVP_PKEY_id(pkey) == EVP_PKEY_RSA_PSS) {
+        crypto_algo = HAB_ALG_RSA_PSS;
+    }
+
     /* Fill in header, ... */
     srk->entry[idx++] = HAB_KEY_PUBLIC;
     if(TGT_AHAB == target)
     {
         srk->entry[idx++] = EXTRACT_BYTE(srk->entry_bytes, 0);
         srk->entry[idx++] = EXTRACT_BYTE(srk->entry_bytes, 8);
-        srk->entry[idx++] = HAB_ALG_PKCS1;
+        srk->entry[idx++] = crypto_algo;
 
         /* Hash Algorithm */
         switch (digest_alg_tag(sd_alg_str))
@@ -156,7 +162,7 @@ srk_entry_pkcs1(tgt_t target,
     {
         srk->entry[idx++] = EXTRACT_BYTE(srk->entry_bytes, 8);
         srk->entry[idx++] = EXTRACT_BYTE(srk->entry_bytes, 0);
-        srk->entry[idx++] = HAB_ALG_PKCS1;
+        srk->entry[idx++] = crypto_algo;
         srk->entry[idx++] = 0;
         srk->entry[idx++] = 0;
     }

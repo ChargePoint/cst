@@ -9,7 +9,7 @@
 =============================================================================
 
         (c) Freescale Semiconductor, Inc. 2011, 2012. All rights reserved.
-        Copyright 2018-2019 NXP
+        Copyright 2018-2019, 2022 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -215,6 +215,8 @@ generate_hash(const uint8_t *buf, size_t msg_bytes, const char *hash_alg,
 
     *hash_bytes = tmp;
 
+    EVP_MD_CTX_free(ctx);
+
     return hash_mem_ptr;
 }
 
@@ -305,48 +307,34 @@ sign_data(const EVP_PKEY *skey, const BUF_MEM *bptr, hash_alg_t hash_alg,
     return sig_buf;
 }
 
-/*--------------------------
-  read_certificate
----------------------------*/
-X509*
-read_certificate(const char* filename)
+/*--------------------------------
+  get_der_encoded_certificate_data
+----------------------------------*/
+int32_t get_der_encoded_certificate_data(const char* reference,
+                                         uint8_t ** der)
 {
-    BIO  *bio_cert = NULL; /**< OpenSSL BIO ptr */
-    X509 *cert = NULL;     /**< X.509 certificate data structure */
-    FILE *fp = NULL;       /**< File pointer for DER encoded file */
-    /** Points to expected location of ".pem" filename extension */
-    const char *temp = filename + strlen(filename) -
-                       PEM_FILE_EXTENSION_BYTES;
+    /** Used for returning either size of der data or 0 to indicate an error */
+    int32_t ret_val = 0;
 
-    bio_cert = BIO_new(BIO_s_file());
-    if (bio_cert == NULL)
-    {
-        return NULL;
-    }
+    /* Read X509 certificate data from cert file */
+    X509 *cert = read_certificate(reference);
 
-    /* PEM encoded */
-    if (!strncasecmp(temp, PEM_FILE_EXTENSION, PEM_FILE_EXTENSION_BYTES))
+    if (cert != NULL)
     {
-        if (BIO_read_filename(bio_cert, filename) <= 0)
+        /* i2d_X509() allocates memory for der data, converts the X509
+         * cert structure to binary der formatted data.  It then
+         * returns the address of the memory allocated for the der data
+         */
+        ret_val = i2d_X509(cert, der);
+
+        /* On error return 0 */
+        if (ret_val < 0)
         {
-            BIO_free(bio_cert);
-            return NULL;
+            ret_val = 0;
         }
-
-        cert = PEM_read_bio_X509(bio_cert, NULL, 0, NULL);
+        X509_free(cert);
     }
-    /* DER encoded */
-    else
-    {
-        /* Open the DER file and load it into a X509 object */
-        fp = fopen(filename, "rb");
-        if (NULL == fp) return NULL;
-        cert = d2i_X509_fp(fp, NULL);
-        fclose(fp);
-    }
-
-    BIO_free(bio_cert);
-    return cert;
+    return ret_val;
 }
 
 /*--------------------------
@@ -406,7 +394,9 @@ read_private_key(const char *filename, pem_password_cb *password_cb,
 
 void print_version(void)
 {
-    printf("Code Signing Tool release version %s\n",CST_VERSION);
+    printf("\nCode Signing Tool Version: %s\n",CST_VERSION);
+    printf("\nCompiled with:\n\t%s\n", OpenSSL_version(OPENSSL_VERSION));
+    printf("\t%s\n\t%s\n\n", OpenSSL_version(OPENSSL_DIR), OpenSSL_version(OPENSSL_ENGINES_DIR));
 }
 
 /*--------------------------

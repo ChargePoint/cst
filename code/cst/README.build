@@ -1,0 +1,99 @@
+Copyright 2023 NXP
+
+This README explains how to create a build envrionment using the Dockerfile and
+build the CST source code.
+
+*** Create a build environment ***
+This guide assumes some familiarity with Docker. If unfamiliar, it may be
+helpful to understand what a Docker Image and Container provide.
+
+The Dockerfile takes some arguments that creates a user. This helps provide
+consistency to permissions and ownership when mounting a local volume on the
+Docker host.
+
+* Dockerfile Arguments
+   hostUserName - Specifies the User username to be created.
+   hostUID - Specifies the UID for the created user.
+   hostGID - Specifies the GID for the created user.
+
+* Build the Docker Image:
+docker build --build-arg hostUserName="YourUserName" --build-arg hostUID=$(id -u) --build-arg hostGID=$(id -g) -t build-cst -f Dockerfile .
+
+* Create Docker Container
+After the Docker Image is available, create a container based on it. It is
+convienient to mount a volume on the docker host where the source will be built.
+This will allow easy access to the source and build artifacts from the host when
+the container is not running.
+
+Modify the path to your host directory to be mounted:
+
+docker run -it -v <path/to/hostside/directory:/home/<username>/cst build-cst /bin/bash
+
+You should now be at a bash prompt inside the running container...
+
+
+*** Build CST ***
+The CST makefile requires the host OS type be supplied when invoked. It is set
+using the OSTYPE variable. The support hosts are:
+
+   linux64 - 64 bit linux
+   linux32 - 32 bit linux
+   mingw32 - windows
+   osx - mac os
+
+** NOTE **
+      The linux32, linux64, and mingw32 types are all tested to build in the
+      Docker container. Building natively in Windows is not tested. The osx
+      can be built natively in macos.
+
+The steps below include creating a copy of the cst source in a temporary working
+directory since the build potentially requires openssl in a specific location.
+
+1. Create a working directory.
+
+    mkdir working-dir
+
+2. Copy the cst source code directory to the working directory.
+
+    cp -a ../cst <path-to-cst-working directory>
+
+ 
+3. Download the latest OpenSSL 1.1.1 release.
+4. The CST makefile has a rule to build OpenSSL. It will configure OpenSSL
+   options needed by CST. There are two ways the makefile can locate OpenSSL:
+    1. Use the envrionment variable, OPENSSL_PATH. 
+    2. If OPENSSL_PATH is not set, the makefile will expect to find OpenSSL in
+        the parent directory. It should be in a folder named 'openssl'.
+        
+            working-dir
+            |-- cst
+            |-- openssl
+
+5. Build OpenSSL, from the cst dir.
+
+   Example build for linux64 with cst and openssl in the same parent directory:
+
+    OSTYPE=linux64 make openssl
+    OSTYPE=linux64 make os_bin
+
+
+   - The object files from this build can be found in code/obj.linux64
+   - The build result is located in a 'release' directory.
+
+    release
+    |-- ca
+        |-- openssl.cnf
+        |-- v3_ca.cnf
+        |-- v3_usr.cnf
+    |-- crts
+    |-- keys
+        |-- add_key.bat
+        |-- add_key.sh
+        |-- ahab_pki_tree.bat
+        |-- ahab_pki_tree.sh
+        |-- hab4_pki_tree.bat
+        |-- hab4_pki_tree.sh
+    |-- linux64
+        |-- bin
+            |-- cst
+            |-- srktool

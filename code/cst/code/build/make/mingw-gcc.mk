@@ -8,7 +8,7 @@
 #
 #             Freescale Semiconductor
 #    (c) Freescale Semiconductor, Inc. 2011, 2012. All rights reserved.
-#    Copyright 2018 NXP
+#    Copyright 2018, 2022 NXP
 #
 #
 #==============================================================================
@@ -32,7 +32,7 @@ COPTIONS += -std=c99 -D_POSIX_C_SOURCE=200809L -Wall -Werror -g
 #==============================================================================
 LDOPTIONS += -g -static
 
-LDLIBS := -lcrypto -lgdi32 -lws2_32
+LDLIBS := -lcrypto -lcrypt32 -lgdi32 -lws2_32
 
 # Archiver flags
 #==============================================================================

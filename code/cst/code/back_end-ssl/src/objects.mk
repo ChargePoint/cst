@@ -8,9 +8,9 @@
 #
 #
 #
-#              Freescale Semiconductor
+#            Freescale Semiconductor
 #        (c) Freescale Semiconductor, Inc. 2011-2015. All rights reserved.
-#
+#            Copyright 2022 NXP
 #
 #
 #==============================================================================
@@ -19,9 +19,14 @@
 OBJECTS += \
 	adapt_layer_openssl.o \
 	pkey.o \
+	cert.o \
 	ssl_wrapper.o
 
-OBJECTS_BACKEND += \
+OBJECTS_BACKEND_SSL += \
 	adapt_layer_openssl.o \
 	pkey.o \
+	cert.o \
 	ssl_wrapper.o
+
+OBJECTS_SRKTOOL += \
+	cert.o

@@ -9,7 +9,7 @@
 @verbatim
 =============================================================================
 
-    Copyright 2018-2020 NXP
+    Copyright 2018-2020, 2022-2023 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -65,7 +65,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /*===========================================================================
                             LOCAL VARIABLES
 =============================================================================*/
-char err_msg[MAX_ERR_MSG_BYTES];
+static char err_msg[MAX_ERR_MSG_BYTES];
 
 /*===========================================================================
                             LOCAL FUNCTION PROTOTYPES
@@ -261,6 +261,7 @@ size_t get_signature_size(const char *filename)
     switch (EVP_PKEY_id(pkey))
     {
         case EVP_PKEY_RSA:
+        case EVP_PKEY_RSA_PSS:
             size += EVP_PKEY_size(pkey);
             break;
 
@@ -324,6 +325,7 @@ void convert_to_nxp_format(const char *filename,
     switch (EVP_PKEY_id(pkey))
     {
         case EVP_PKEY_RSA:
+        case EVP_PKEY_RSA_PSS:
             srk_entry_pkcs1(target, pkey, &srk_entry, ca_flag, get_digest_name(hash));
             break;
 
@@ -466,6 +468,10 @@ void generate_signature(byte_str_t *data,
     {
         case EVP_PKEY_RSA:
             sig_fmt = SIG_FMT_PKCS1;
+            break;
+
+        case EVP_PKEY_RSA_PSS:
+            sig_fmt = SIG_FMT_RSA_PSS;
             break;
 
         case EVP_PKEY_EC:

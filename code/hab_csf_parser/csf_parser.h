@@ -1,6 +1,6 @@
 /*
 
-    Copyright 2017-2019 NXP
+    Copyright 2017-2019, 2022 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -110,6 +110,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define HAB_KEY_SECRET   0xE2 /* Secret Key HAB_KEY_SECRET */
 #define HAB_KEY_MASTER   0xED /* Master Key Encryption Key HAB_KEY_MASTER */
 #define HAB_KEY_HASH     0xEE /* Hash HAB_KEY_HASH */
+
+#define HAB_ALG_PKCS1    0x21 /* PKCS#1 RSA signature algorithm  */
+#define HAB_ALG_ECDSA    0x27 /* NIST ECDSA signature algorithm */
 
 /************************
         HAB version flags

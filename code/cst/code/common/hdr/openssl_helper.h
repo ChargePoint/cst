@@ -12,7 +12,7 @@
 
               Freescale Semiconductor
         (c) Freescale Semiconductor, Inc. 2011, 2012. All rights reserved.
-        Copyright 2018-2019 NXP
+        Copyright 2018-2020 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -210,7 +210,28 @@ generate_hash(const uint8_t *buf, size_t msg_bytes, const char *hash_alg,
 extern uint8_t*
 get_bn(const BIGNUM *a, size_t *bytes);
 
-
+/** get_der_encoded_certificate_data
+ *
+ * Read X.509 certificate data from given certificate reference and encode it
+ * to DER format and returns result in @derder.
+ *
+ * @param[in] filename    filename, function will work with both PEM and DER
+ *                        input certificate files.
+ *
+ * @param[out] der        address to write der data
+ *
+ * @post if successful the contents of the certificate are written at address
+ * @a der.
+ *
+ * @pre  #openssl_initialize has been called previously
+ *
+ * @post caller is responsible for releasing memory location returned in @a der
+ *
+ * @returns if successful function returns number of bytes written at address
+ * @a der, 0 otherwise.
+ */
+extern int32_t get_der_encoded_certificate_data(const char* reference,
+                                         uint8_t ** der);
 /** sign_data
  *
  * Signs a data buffer with a given private key
@@ -235,24 +256,6 @@ extern uint8_t*
 sign_data(const EVP_PKEY *skey, const BUF_MEM *bptr, hash_alg_t hash_alg,
           size_t *sig_bytes);
 
-/** read_certificate
- *
- * Read X.509 certificate data from given certificate file
- *
- * @param[in] filename    filename of certificate file
- *
- * @post if successful the contents of the certificate are extracted to X509
- * object.
- *
- * @pre  #openssl_initialize has been called previously
- *
- * @post caller is responsible for releasing X.509 certificate memory.
- *
- * @returns if successful function returns location of X509 object
- *   otherwise NULL.
- */
-extern X509*
-read_certificate(const char* filename);
 
 /** read_private_key
  *

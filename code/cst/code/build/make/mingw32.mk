@@ -9,7 +9,7 @@
 #
 #             Freescale Semiconductor
 #    (c) Freescale Semiconductor, Inc. 2011-2015. All rights reserved.
-#    Copyright 2018, 2020 NXP
+#    Copyright 2018, 2020, 2022 NXP
 #
 #
 #==============================================================================
@@ -23,4 +23,4 @@ endif
 
 EXEEXT = .exe
 
-OPENSSL_CONFIG := mingw --cross-compile-prefix=i686-w64-mingw32-
+OPENSSL_CONFIG := mingw --cross-compile-prefix=i686-w64-mingw32- enable-capieng

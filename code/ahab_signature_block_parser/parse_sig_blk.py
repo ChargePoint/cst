@@ -1,14 +1,14 @@
-#
-# Copyright 2019 NXP
-#
-
 #!/usr/bin/env python3
+
+#
+# Copyright 2019, 2022 NXP
+#
 
 import os
 import shutil
 from optparse   import OptionParser
 from common     import *
-from hashlib    import sha512
+from hashlib    import sha512, sha256
 
 # Definitions
 
@@ -48,27 +48,29 @@ SRK_TABLE_VERSION   = 0x42
 SRK_TAG             = 0xE1
 
 SRK_RSA             = 0x21
+SRK_RSA_PSS         = 0x22
 SRK_ECDSA           = 0x27
 
 ahab_sig_algs = {
-    SRK_RSA   : "RSA",
-    SRK_ECDSA : "ECDSA"
+    SRK_RSA     : "RSA",
+    SRK_RSA_PSS : "RSA_PSS",
+    SRK_ECDSA   : "ECDSA"
 }
 
-SRK_PRIME256V1 = 0x1
-SRK_SEC384R1   = 0x2
-SRK_SEC521R1   = 0x3
-SRK_RSA2048    = 0x5
-SRK_RSA3072    = 0x6
-SRK_RSA4096    = 0x7
+SRK_SECP256R1   = 0x1
+SRK_SECP384R1   = 0x2
+SRK_SECP521R1   = 0x3
+SRK_RSA2048     = 0x5
+SRK_RSA3072     = 0x6
+SRK_RSA4096     = 0x7
 
 ahab_key_types = {
-    SRK_PRIME256V1 : STR_SECP256R1,
-    SRK_SEC384R1   : STR_SECP384R1,
-    SRK_SEC521R1   : STR_SECP521R1,
-    SRK_RSA2048    : "rsa2048",
-    SRK_RSA3072    : "rsa3072",
-    SRK_RSA4096    : "rsa4096"
+    SRK_SECP256R1   : STR_SECP256R1,
+    SRK_SECP384R1   : STR_SECP384R1,
+    SRK_SECP521R1   : STR_SECP521R1,
+    SRK_RSA2048     : "rsa2048",
+    SRK_RSA3072     : "rsa3072",
+    SRK_RSA4096     : "rsa4096"
 }
 
 CERTIFICATE_TAG     = 0xAF
@@ -110,6 +112,9 @@ def decode_public_key(infile, offset):
     if sig_alg == SRK_RSA:
         log_len("modulus len", mod_x_len)
         log_len("exponent len", exp_y_len)
+    elif sig_alg == SRK_RSA_PSS:
+        log_len("modulus len", mod_x_len)
+        log_len("exponent len", exp_y_len)
     elif sig_alg == SRK_ECDSA:
         if mod_x_len != exp_y_len:
             error("invalid lengths")
@@ -121,7 +126,7 @@ def decode_public_key(infile, offset):
 
 # Function to decode container and save relevant information
 
-def decode_container(infile, offset):
+def decode_container(infile, offset, srk_hsh_alg):
 
     # Container header
 
@@ -236,12 +241,12 @@ def decode_container(infile, offset):
 
         log("SRK Table records:")
         tab()
-        (srk_len, srk_sig_alg, srk_hsh_alg, srk_type, mod_x_len,
+        (srk_len, srk_sig_alg, sig_hsh_alg, srk_type, mod_x_len,
          exp_y_len) = decode_public_key(infile, srk_table_offset)
 
         srk_info.append({
             "sig_alg" : srk_sig_alg,
-            "hsh_alg" : ahab_hsh_algs[srk_hsh_alg],
+            "hsh_alg" : ahab_hsh_algs[sig_hsh_alg],
             "key_typ" : ahab_key_types[srk_type],
             "mod_x"   : bytes2int(get_bytes(infile, srk_table_offset + 12,
                                             mod_x_len), "big"),
@@ -283,12 +288,18 @@ def decode_container(infile, offset):
 
         try:
             srkHashFile = open("output/SRKHash.bin", "wb")
-            srkHashFile.write(sha512(srk_table).digest())
+            if srk_hsh_alg == STR_SHA256:
+                srkHashFile.write(sha256(srk_table).digest())
+            else:
+                srkHashFile.write(sha512(srk_table).digest())
         except:
             parser.error("Failed to create SRK hash binary dump")
 
         tab()
-        digest = sha512(srk_table).digest()
+        if srk_hsh_alg == STR_SHA256:
+            digest = sha256(srk_table).digest()
+        else:
+            digest = sha512(srk_table).digest()
         for i in range(0, len(digest), 4):
             log_x("fuse word {:2d}".format(int(i/4)),
                   bytes2int(digest[i:i+4]), int(32/4))
@@ -433,13 +444,16 @@ if __name__ == "__main__":
     usage = \
 "\n$ %prog <filepath> <offset>\n\
     filepath: Path for image container binary to be analyzed\n\
-    offset:   Container header offset in binary\
+    offset:   Container header offset in binary\n\
+    hash alg: Hash algorithm to generate SRK HASH\n\
+              sha512 - For 8/8x devices\n\
+              sha256 - For 8ULP\
 "
 
     parser = OptionParser(usage=usage)
     (options, args) = parser.parse_args()
 
-    if len(args) != 2:
+    if len(args) != 2 and len(args) != 3:
         parser.error("incorrect number of arguments")
 
     try:
@@ -452,6 +466,13 @@ if __name__ == "__main__":
         offset = int(args[1], 0)
     except:
         parser.error("offset not a number")
+
+    if len(args) == 3 and \
+        (args[2].lower() == STR_SHA256 or \
+        args[2].lower() == STR_SHA512):
+            srk_hsh_alg = args[2].lower()
+    else:
+        srk_hsh_alg = STR_SHA512
 
     # Delete existing output directory if any
 
@@ -471,4 +492,4 @@ if __name__ == "__main__":
     log_v("File", filepath)
     log_x("Offset", offset)
 
-    decode_container(infile, offset)
+    decode_container(infile, offset, srk_hsh_alg)

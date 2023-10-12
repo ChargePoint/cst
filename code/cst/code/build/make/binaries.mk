@@ -9,7 +9,7 @@
 #
 #             Freescale Semiconductor
 #    (c) Freescale Semiconductor, Inc. 2011-2015 All rights reserved.
-#    Copyright 2018-2020 NXP
+#    Copyright 2018-2020, 2022 NXP
 #
 #
 #===============================================================================
@@ -26,7 +26,8 @@ include ../build/make/init.mk
 
 # Binaries
 #===============================================================================
-LIB_BACKEND        := libbackend.a
+LIB_BACKEND_SSL    := libbackend-ssl.a
+LIB_BACKEND_PKCS11 := libbackend-pkcs11.a
 LIB_FRONTEND       := libfrontend.a
 
 EXE_SRKTOOL        := srktool$(EXEEXT)
@@ -72,14 +73,14 @@ rel_exe: $(notdir $(EXECUTABLES))
 
 $(EXE_SRKTOOL): $(OBJECTS_SRKTOOL)
 
-$(LIB_BACKEND): $(OBJECTS_BACKEND)
+$(LIB_BACKEND_SSL): $(OBJECTS_BACKEND_SSL)
+$(LIB_BACKEND_PKCS11): $(OBJECTS_BACKEND_PKCS11)
 
 $(LIB_FRONTEND): $(OBJECTS_FRONTEND)
 
-$(EXE_CST): $(LIB_FRONTEND) $(LIB_BACKEND)
+$(EXE_CST): $(LIB_FRONTEND) $(LIB_BACKEND_SSL) $(LIB_BACKEND_PKCS11)
 
 $(EXE_CONVLB): $(OBJECTS_CONVLB)
-
 
 clean:
 	@echo "Clean obj.$(OSTYPE)"

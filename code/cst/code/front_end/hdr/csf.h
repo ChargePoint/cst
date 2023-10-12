@@ -11,7 +11,7 @@
 
               Freescale Semiconductor
         (c) Freescale Semiconductor, Inc. 2011-2015 All rights reserved.
-        Copyright 2018-2020 NXP
+        Copyright 2018-2020, 2022 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -136,6 +136,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
             log_arg_cmd(arg, STR_ILLEGAL, cmd->type);                    \
             return ERROR_UNSUPPORTED_ARGUMENT;                           \
         }
+
+#define PRINT_V(s)          do { if(1 == (g_verbose)) printf(s); }while(0)
 /*===========================================================================
                               TYPEDEFS
 =============================================================================*/
@@ -391,6 +393,8 @@ extern tgt_t g_target;               /* Global to hold target                */
 extern uint8_t g_ahab_version;       /* Global to hold ahab version          */
 extern ahab_data_t g_ahab_data;      /* Global to hold AHAB data             */
 extern func_mode_t g_mode;           /* Global to hold functional mode       */
+
+extern bool g_verbose;               /* Option to print verbose info         */
 
 /*===========================================================================
                               GLOBAL FUNCTIONS

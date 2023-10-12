@@ -1,37 +1,37 @@
-#
-# Copyright 2019 NXP
-#
-
 #!/usr/bin/env python3
 
-from cryptography.hazmat.backends              import default_backend
-from cryptography.hazmat.primitives.asymmetric import ec, utils, rsa, padding
-from cryptography.hazmat.primitives            import hashes
+#
+# Copyright 2019, 2022 NXP
+#
+
+# from cryptography.hazmat.backends              import default_backend
+# from cryptography.hazmat.primitives.asymmetric import ec, utils, rsa, padding
+# from cryptography.hazmat.primitives            import hashes
 
 # Definitions
 
 LINE_BREAK = "-" * 80
 TAB        = " " * 4
 
-STR_SECP256R1 = "prime256v1"
-STR_SECP384R1 = "sec384r1"
-STR_SECP521R1 = "sec521r1"
+STR_SECP256R1 = "secp256r1"
+STR_SECP384R1 = "secp384r1"
+STR_SECP521R1 = "secp521r1"
 
-curves = {
-    STR_SECP256R1 : ec.SECP256R1(),
-    STR_SECP384R1 : ec.SECP384R1(),
-    STR_SECP521R1 : ec.SECP521R1()
-}
+# curves = {
+#     STR_SECP256R1 : ec.SECP256R1(),
+#     STR_SECP384R1 : ec.SECP384R1(),
+#     STR_SECP521R1 : ec.SECP521R1()
+# }
 
-STR_SHA256 = "SHA256"
-STR_SHA384 = "SHA384"
-STR_SHA512 = "SHA512"
+STR_SHA256 = "sha256"
+STR_SHA384 = "sha384"
+STR_SHA512 = "sha512"
 
-hash_algos = {
-    STR_SHA256 : hashes.SHA256(),
-    STR_SHA384 : hashes.SHA384(),
-    STR_SHA512 : hashes.SHA512(),
-}
+# hash_algos = {
+#     STR_SHA256 : hashes.SHA256(),
+#     STR_SHA384 : hashes.SHA384(),
+#     STR_SHA512 : hashes.SHA512(),
+# }
 
 # Globals
 

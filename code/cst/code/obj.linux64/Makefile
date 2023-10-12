@@ -23,6 +23,3 @@ COPTIONS += -m64
 LDOPTIONS += -m64
 
 include ../build/make/binaries.mk
-
-
-

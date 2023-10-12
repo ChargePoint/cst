@@ -10,7 +10,7 @@
 
               Freescale Semiconductor
         (c) Freescale Semiconductor, Inc. 2011-2015. All rights reserved.
-        Copyright 2018-2020 NXP
+        Copyright 2018-2020, 2022 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -75,7 +75,7 @@ static int32_t hab4_authenticate_data(sig_fmt_t sig_format, int32_t engine,
         int32_t engine_cfg, int32_t vfy_index, block_t *block, uint8_t *buf,
         int32_t *cmd_len, size_t* size_blocks);
 
-static int32_t validate_block_arguments(block_t *block_list);
+static int32_t validate_block_arguments(block_t *block_list, commands_t cmd_type);
 
 int32_t write_encrypted_data_to_blocks(const char* file, block_t * block);
 
@@ -91,7 +91,6 @@ static int32_t generate_and_save_aead_data(uint8_t * nonce,
 
 int g_no_ca = 0;
 int32_t g_srk_set_hab4 = SRK_SET_OEM;
-int g_dummy_csf_data_generated = 0;
 /*===========================================================================
                           LOCAL FUNCTION DEFINITIONS
 =============================================================================*/
@@ -279,13 +278,15 @@ static int32_t process_authenticatedata_arguments(command_t* cmd,
  *
  * @param[in] block_list, pointer to block list
  *
+ * @param[in] cmd_type, command type
+ *
  * @retval #SUCCESS  all arguments validated to be correct
  *
  * @retval #ERROR_FILE_NOT_PRESENT file to get block data is not present
  *
  * @retval #ERROR_INVALID_BLOCK_ARGUMENTS on any other check fails
  */
-int32_t validate_block_arguments(block_t *block_list)
+int32_t validate_block_arguments(block_t *block_list, commands_t cmd_type)
 {
     int32_t ret_val = SUCCESS;
     block_t *block = block_list;
@@ -309,7 +310,7 @@ int32_t validate_block_arguments(block_t *block_list)
 
         if((block->start + block->length) > file_size)
         {
-            log_arg_cmd(Blocks, STR_BLKS_INVALID_LENGTH, CmdAuthenticateData);
+            log_arg_cmd(Blocks, STR_BLKS_INVALID_LENGTH, cmd_type);
 
             ret_val = ERROR_INVALID_BLOCK_ARGUMENTS;
             break;
@@ -328,8 +329,6 @@ int32_t validate_block_arguments(block_t *block_list)
  * Collects necessary arguments from csf file, validate the arguments, set
  * default values for arguments if missing from csf file.
  * Calls Macro AUT_CSF to update g_csf_buffer with authenticate csf command.
- * Finally generates dummy csf signature and assigns the buffer address
- * with signature data to the command.
  *
  * @par Operation
  *
@@ -348,14 +347,14 @@ int32_t cmd_handler_authenticatecsf(command_t* cmd)
 
     uint32_t csfk_idx = (g_srk_set_hab4 == SRK_SET_OEM) ? HAB_IDX_CSFK : HAB_IDX_CSFK1;
 
-    printf("Authenticate CSF\n");
-
     /* The Authenticate CSF command is invalid when AHAB is targeted */
     if (TGT_AHAB == g_target)
     {
         log_cmd(cmd->type, STR_ILLEGAL);
         return ERROR_INVALID_COMMAND;
     }
+
+    PRINT_V("Authenticate CSF\n");
 
     /* Adjust CSFK index if NOCAK */
     if ( g_no_ca == 1 ) {
@@ -431,35 +430,7 @@ int32_t cmd_handler_authenticatecsf(command_t* cmd)
                 g_csf_buffer_index += AUT_CSF_BYTES;
             }
         }
-        /**
-         * Dummy signature for now, will be regenerated once csf processing
-         * is completed. Required to advance g_csf_buffer_index.
-         */
-        ret_val = create_sig_file(FILE_SIG_CSF_DATA, g_key_certs[csfk_idx],
-                    (g_hab_version >= HAB4) ? SIG_FMT_CMS : SIG_FMT_PKCS1,
-                    g_csf_buffer, HAB_CSF_BYTES_MAX);
-        if(ret_val != SUCCESS)
-        {
-            break;
-        }
-
-        /**
-         * Finally save_file_data to read the sig file and attaches data
-         * buffer to the cmd.
-         */
-        ret_val = save_file_data(cmd, FILE_SIG_CSF_DATA, NULL, 0,
-            (g_hab_version >= HAB4), NULL, NULL, g_hash_alg);
-        if(ret_val != SUCCESS)
-        {
-            break;
-        }
     } while(0);
-
-    /* The initial call to this function is only to generated dummy data as a
-       place holder in the CSF output. Set the global flag to indicate the
-       dummy CSF data has been generated. This is used to prevent the dummy data
-       from being included in the digest data to be sent to an offline signer. */
-    g_dummy_csf_data_generated = 1;
 
     return ret_val;
 }
@@ -591,7 +562,7 @@ int32_t cmd_handler_authenticatedata(command_t* cmd)
     uint32_t srk_idx = (g_srk_set_hab4 == SRK_SET_OEM) ? HAB_IDX_SRK : HAB_IDX_SRK1;
     uint32_t csfk_idx = (g_srk_set_hab4 == SRK_SET_OEM) ? HAB_IDX_CSFK : HAB_IDX_CSFK1;
 
-    printf("Authenticate data\n");
+    PRINT_V("Authenticate data\n");
 
     /* Adjust CSFK index if NOCAK */
     if (g_no_ca == 1) {
@@ -657,7 +628,7 @@ int32_t cmd_handler_authenticatedata(command_t* cmd)
                 ret_val = ERROR_INSUFFICIENT_ARGUMENTS;
                 break;
             }
-            ret_val = validate_block_arguments(block);
+            ret_val = validate_block_arguments(block, cmd->type);
             if(ret_val != SUCCESS)
             {
                 break;
@@ -1203,6 +1174,8 @@ int32_t cmd_handler_decryptdata(command_t* cmd)
         return ret_val;
     }
 
+    PRINT_V("Decrypt Data\n");
+
     /* get the arguments */
     ret_val = process_authenticatedata_arguments(cmd, &block,
         &vfy_index, &engine, &engine_cfg, NULL, NULL, (size_t *)&mac_bytes, NULL, NULL, NULL);
@@ -1230,7 +1203,7 @@ int32_t cmd_handler_decryptdata(command_t* cmd)
         }
 
         /* validate the arguments */
-        ret_val = validate_block_arguments(block);
+        ret_val = validate_block_arguments(block, cmd->type);
         if(ret_val != SUCCESS)
         {
             break;
@@ -1409,4 +1382,3 @@ int32_t cmd_handler_decryptdata(command_t* cmd)
 
     return ret_val;
 }
-

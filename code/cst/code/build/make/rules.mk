@@ -8,7 +8,7 @@
 #
 #             Freescale Semiconductor
 #       (c) Freescale Semiconductor, Inc. 2011, 2012. All rights reserved.
-#       Copyright 2018-2019 NXP
+#       Copyright 2018-2019, 2023 NXP
 #
 #
 #==============================================================================
@@ -25,11 +25,6 @@ LFLAGS  := -t
 %.a:
 	@echo "Create archive $@"
 	$(AR) $(ARFLAGS) $@ $^
-ifneq ($(OSTYPE),mingw32)
-ifneq ($(OSTYPE),osx)
-	$(OBJCOPY) --weaken $@
-endif
-endif
 
 %.exe:
 	@echo "Link $@"

@@ -1,6 +1,6 @@
 /*
 
-    Copyright 2017-2019 NXP
+    Copyright 2017-2019, 2022 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -47,32 +47,25 @@ int parse_mac_sec(const uint8_t *csf_hdr, int csf_len, int offset)
 
         validate(csf_len != 0, "csf length");
 
-        csf_sec_mac_t *mac_sec_temp = (csf_sec_mac_t *)csf_hdr;
+        csf_sec_mac_t *mac_sec = (csf_sec_mac_t *)csf_hdr;
 
         int i, mac_sec_len;
 
         if (debug_log) {
                 fprintf(fp_debug, "Parsing following values\n");
-                for (i=0; i < HAB_HDR_LEN(mac_sec_temp) ; i++)
+                for (i=0; i < HAB_HDR_LEN(mac_sec) ; i++)
                         fprintf(fp_debug, "0x%02X ", csf_hdr[i]);
                 fprintf(fp_debug, "\n");
         }
 
-        validate(mac_sec_temp->tag == HAB_TAG_MAC, "tag");
-        validate((mac_sec_temp->version >= HAB_VER_40 && \
-                  mac_sec_temp->version <= HAB_VER_45 ), "hab version");
-        validate((offset + HAB_HDR_LEN(mac_sec_temp)) <= csf_len, "length OOB");
-        validate((HAB_HDR_LEN(mac_sec_temp) == (mac_sec_temp->nonce_bytes + \
-                                                mac_sec_temp->mac_bytes + \
-                                                sizeof(hab_hdr_t) + sizeof(hab_hdr_t))), \
-                                                "MAC Nonce length");
-
-        csf_sec_mac_t *mac_sec = malloc(HAB_HDR_LEN(mac_sec_temp));
-        if (memcpy(mac_sec, csf_hdr, HAB_HDR_LEN(mac_sec_temp)) == NULL) {
-                puts("Error: Memcopy to copy mac section contents failed.\n");
-                free(mac_sec);
-                return FAIL;
-        }
+        validate(mac_sec->tag == HAB_TAG_MAC, "tag");
+        validate((mac_sec->version >= HAB_VER_40 && \
+                  mac_sec->version <= HAB_VER_45 ), "hab version");
+        validate((offset + HAB_HDR_LEN(mac_sec)) <= csf_len, "length OOB");
+        validate((HAB_HDR_LEN(mac_sec) == (mac_sec->nonce_bytes + \
+                                           mac_sec->mac_bytes + \
+                                           sizeof(hab_hdr_t) + sizeof(hab_hdr_t))), \
+                                           "MAC Nonce length");
 
         fprintf(fp_output, "\n\n");
         w2f_hdr("TAG");
@@ -99,7 +92,6 @@ int parse_mac_sec(const uint8_t *csf_hdr, int csf_len, int offset)
         fprintf(fp_output, "\n\n");
 
         mac_sec_len = HAB_HDR_LEN(mac_sec);
-        free(mac_sec);
 
         return mac_sec_len;
 }
@@ -122,29 +114,22 @@ int parse_sig_sec(const uint8_t *csf_hdr, int csf_len, int offset, int *sig_num)
 
         validate(csf_len != 0, "csf length");
 
-        csf_sec_sig_t *sig_sec_temp = (csf_sec_sig_t *)csf_hdr;
+        csf_sec_sig_t *sig_sec = (csf_sec_sig_t *)csf_hdr;
 
         int sig_sec_len;
 
         if (debug_log) {
                 int i = 0;
                 fprintf(fp_debug, "Parsing following values\n");
-                for (i=0; i < HAB_HDR_LEN(sig_sec_temp) ; i++)
+                for (i=0; i < HAB_HDR_LEN(sig_sec) ; i++)
                         fprintf(fp_debug, "0x%02X ", csf_hdr[i]);
                 fprintf(fp_debug, "\n");
         }
 
-        validate(sig_sec_temp->tag == HAB_TAG_SIG, "tag");
-        validate((sig_sec_temp->version >= HAB_VER_40 && \
-                  sig_sec_temp->version <= HAB_VER_45 ), "hab version");
-        validate((offset + HAB_HDR_LEN(sig_sec_temp)) <= csf_len, "length OOB");
-
-        csf_sec_sig_t *sig_sec = malloc(HAB_HDR_LEN(sig_sec_temp));
-        if (memcpy(sig_sec, csf_hdr, HAB_HDR_LEN(sig_sec_temp)) == NULL) {
-                puts("Error: Memcopy to copy mac section contents failed.\n");
-                free(sig_sec);
-                return FAIL;
-        }
+        validate(sig_sec->tag == HAB_TAG_SIG, "tag");
+        validate((sig_sec->version >= HAB_VER_40 && \
+                  sig_sec->version <= HAB_VER_45 ), "hab version");
+        validate((offset + HAB_HDR_LEN(sig_sec)) <= csf_len, "length OOB");
 
         fprintf(fp_output, "\n\n");
         w2f_hdr("TAG");
@@ -172,12 +157,11 @@ int parse_sig_sec(const uint8_t *csf_hdr, int csf_len, int offset, int *sig_num)
                 fwrite(sig_sec->sig, (HAB_HDR_LEN(sig_sec) - HAB_HDR_SIZE),  1, fp_sig);
                 puts("Signature file created\n");
                 (*sig_num)++;
-        } else
+        } else {
                 puts("Error: Unable to create Signature file\n");
+        }
 
         fclose(fp_sig);
-
-        free(sig_sec);
 
         return sig_sec_len;
 }
@@ -189,17 +173,20 @@ int parse_sig_sec(const uint8_t *csf_hdr, int csf_len, int offset, int *sig_num)
  * @Inputs      : csf_hdr - Pointer to the start of CSF
  *                csf_len - Length of CSF
  *                offset  - Offset from beginning of CSF
+ *                cert_num - Certificate Number
  *
  * @Outputs     : return length of certificate
  *
  */
-int parse_cert_sec(const uint8_t *csf_hdr, int csf_len, int offset)
+int parse_cert_sec(const uint8_t *csf_hdr, int csf_len, int offset, int *cert_num)
 {
         assert(csf_hdr != NULL);
 
         validate(csf_len != 0, "csf length");
 
         csf_sec_cert_t *cert_sec = (csf_sec_cert_t *)csf_hdr;
+
+        int cert_sec_len;
 
         if (debug_log) {
                 int i = 0;
@@ -228,9 +215,28 @@ int parse_cert_sec(const uint8_t *csf_hdr, int csf_len, int offset)
         fprintf(fp_output, "   \t0x%X\t\tCertificate Offset\tRelative to start of CSF\n\n", (offset + HAB_HDR_SIZE));
 
         if (getAbs(cert_sec))
-                return HAB_HDR_LEN(cert_sec) + (HAB_HDR_SIZE - getAbs(cert_sec));
+                cert_sec_len = HAB_HDR_LEN(cert_sec) + (HAB_HDR_SIZE - getAbs(cert_sec));
         else
-                return HAB_HDR_LEN(cert_sec);
+                cert_sec_len =  HAB_HDR_LEN(cert_sec);
+
+        /* Hacky way to avoid parsing SRK table as a certificate */
+        if (!(cert_sec->cert[0] == HAB_KEY_PUBLIC && \
+             (cert_sec->cert[3] == HAB_ALG_PKCS1 || cert_sec->cert[3] == HAB_ALG_ECDSA))) {
+                char cert_fn[17];
+                snprintf(cert_fn, sizeof(cert_fn), "output/cert%d.der", *cert_num);
+                FILE *fp_cert = fopen(cert_fn, "w");
+                if (fp_cert) {
+                        fwrite(cert_sec->cert, (HAB_HDR_LEN(cert_sec) - HAB_HDR_SIZE),  1, fp_cert);
+                        puts("Certificate file created\n");
+                        (*cert_num)++;
+                } else {
+                        puts("Error: Unable to create Certificate file\n");
+                }
+
+                fclose(fp_cert);
+        }
+
+        return cert_sec_len;
 }
 
 /* @Function    : parse_set_cmd
@@ -659,6 +665,9 @@ int parse_aut_dat_cmd(const uint8_t *csf_hdr, int csf_len, int offset)
                 fprintf(fp_debug, "\n");
         }
 
+        if ((aut_dat_cmd->key == 0) && (aut_dat_cmd->sig_fmt != HAB_CMD_AUT_DAT_PCL_AEAD))
+                puts("Fast Authentication Detected\n");
+
         validate(aut_dat_cmd->cmd == HAB_CMD_AUT_DAT, "tag");
         validate(aut_dat_cmd->flags == HAB_CMD_AUT_DAT_NO_FLAG || aut_dat_cmd->flags == HAB_CMD_AUT_DAT_ABS, "flags");
         validate((offset + HAB_HDR_LEN(aut_dat_cmd)) <= csf_len, "length OOB");
@@ -856,12 +865,11 @@ to verify\n\n", (uint32_t)from_be32(aut_dat_cmd->region[j].size), j, j);
  * @Inputs      : csf_hdr  - Pointer to the start of CSF
  *                csf_len  - Length of CSF
  *                offset   - Offset from beginning of CSF
- 8                cert_num - Certificate Number
  *
  * @Outputs     : return Success or Fail
  *
  */
-int parse_ins_key_cmd(const uint8_t *csf_hdr, int csf_len, int offset, int *cert_num)
+int parse_ins_key_cmd(const uint8_t *csf_hdr, int csf_len, int offset)
 {
         assert(csf_hdr != NULL);
 
@@ -1014,24 +1022,20 @@ int parse_ins_key_cmd(const uint8_t *csf_hdr, int csf_len, int offset, int *cert
                         csf_sec_cert_t *cert_sec = (csf_sec_cert_t *)&csf_hdr[srktable_offset];
                         fwrite(&csf_hdr[srktable_offset], HAB_HDR_LEN(cert_sec), 1, fp_srkTable);
                         puts("SRK Table file created\n");
-                } else
+                } else {
                         puts("Error: Unable to create SRK Table file\n");
+                }
 
                 fclose(fp_srkTable);
         } else if (ins_key_cmd->cert_fmt == HAB_PCL_X509) {
-                char cert_fn[17];
-                snprintf(cert_fn, sizeof(cert_fn), "output/cert%d.der", *cert_num);
-                FILE *fp_cert = fopen(cert_fn, "w");
-                if (fp_cert) {
-                        int cert_offset = from_be32(ins_key_cmd->key_loc) - offset;
-                        csf_sec_cert_t *cert_sec = (csf_sec_cert_t *)&csf_hdr[cert_offset];
-                        fwrite(&csf_hdr[cert_offset + HAB_HDR_SIZE], (HAB_HDR_LEN(cert_sec) - HAB_HDR_SIZE), 1, fp_cert);
-                        puts("Certificate file created\n");
-                        (*cert_num)++;
-                } else
-                        puts("Error: Unable to create Certificate file\n");
-
-                fclose(fp_cert);
+                /* Report which certificate is found */
+                if (ins_key_cmd->tgt_index == 0) {
+                        puts("SRK Certificate Detected\n");
+                } else if (ins_key_cmd->tgt_index == 1) {
+                        puts("CSF Certificate Detected\n");
+                } else if (ins_key_cmd->tgt_index > 1 && ins_key_cmd->tgt_index < 6) {
+                        puts("IMG Certificate Detected\n");
+                }
         }
 
         return HAB_HDR_LEN(ins_key_cmd);
@@ -1122,7 +1126,7 @@ int parse_csf(const uint8_t *csf, int csf_len)
                         }
                         break;
                 case (HAB_CMD_INS_KEY):
-                        hdr_len = parse_ins_key_cmd(&csf[offset], csf_len, offset, &cert_count);
+                        hdr_len = parse_ins_key_cmd(&csf[offset], csf_len, offset);
                         if (!hdr_len) {
                                 puts("Error: Couldn't parse Insert Key Command\n");
                                 return FAIL;
@@ -1151,7 +1155,7 @@ int parse_csf(const uint8_t *csf, int csf_len)
                         }
                         break;
                 case (HAB_TAG_CRT):
-                        hdr_len = parse_cert_sec(&csf[offset], csf_len, offset);
+                        hdr_len = parse_cert_sec(&csf[offset], csf_len, offset, &cert_count);
                         if (!hdr_len) {
                                 puts("Error: Couldn't parse Certificate Section\n");
                                 return FAIL;
@@ -1227,7 +1231,7 @@ static int read_file(FILE **fp, char *input_file)
  */
 static void print_usage(void) {
         puts("Usage: csf_parser [-d] [[-s <signed_image>] | [-c <csf_binary>]]\n"
-		"options:\n"
+        "options:\n"
                 "        -d|--enable-debug     -->\tEnable Debug information\n"
                 "        -s|--signed-image     -->\tInput signed image\n"
                 "        -c|--csf-binary       -->\tInput CSF binary\n"

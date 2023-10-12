@@ -9,7 +9,7 @@
 
               Freescale Semiconductor
         (c) Freescale Semiconductor, Inc. 2011-2012 All rights reserved.
-        Copyright 2019 NXP
+        Copyright 2019-2020 NXP
 
 =============================================================================
 @endverbatim */

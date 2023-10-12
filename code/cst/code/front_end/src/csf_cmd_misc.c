@@ -10,7 +10,7 @@
 
               Freescale Semiconductor
         (c) Freescale Semiconductor, Inc. 2011,2012. All rights reserved.
-        Copyright 2018, 2020 NXP
+        Copyright 2018, 2020, 2022 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -492,6 +492,17 @@ static int32_t cmd_handler_init_unlock(command_t* cmd, uint8_t hab_cmd_id)
     bool flag_uid      = false;
 
     arg = cmd->argument;
+
+    switch (hab_cmd_id) {
+        case HAB_CMD_INIT:
+            PRINT_V("INIT\n");
+            break;
+        case HAB_CMD_UNLK:
+            PRINT_V("UNLOCK\n");
+            break;
+        default:
+            break;
+    }
 
     for(i=0; i<cmd->argument_count; i++)
     {

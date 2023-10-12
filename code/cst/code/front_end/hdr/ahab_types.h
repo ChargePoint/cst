@@ -1,6 +1,6 @@
 /*
  *
- *     Copyright 2017-2019 NXP
+ *     Copyright 2017-2020 NXP
  *
  *     Redistribution and use in source and binary forms, with or without modification,
  *     are permitted provided that the following conditions are met:
@@ -42,6 +42,7 @@
  *  - image (hashing)
  */
 #define SRK_RSA     0x21
+#define SRK_RSA_PSS 0x22
 #define SRK_ECDSA   0x27
 
 #define SRK_PRIME256V1  0x1

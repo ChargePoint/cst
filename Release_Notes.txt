@@ -1,9 +1,9 @@
-                CST 3.3.1 Release Notes
+                CST 3.3.2 Release Notes
 
 PROJECT(S): CST
-DATE: July, 2020
+DATE: April, 2023
 
-COPYRIGHT 2017-2020 NXP
+COPYRIGHT 2017-2023 NXP
 
 1 READ ME FIRST
     This is the NXP Code Signing Tool (CST) for the High
@@ -16,13 +16,13 @@ COPYRIGHT 2017-2020 NXP
 
 1.1 REQUIREMENTS
     This release supports Linux, MacOS, and Windows hosts.
-    For Linux, the CST is known to work on Ubuntu 14.04 and later.
+    For Linux, the CST is known to work on Ubuntu 18.04 and later.
     For Windows, the CST is known to work on Windows 7 and later.
-    For MacOS, the CST is known to work on Mojave and later.
+    For MacOS, the CST is known to work on Monterey and later.
 
     Most Linux distributions should work but they have not been fully
-    tested. If you run into library problems, see section 2.1 below
-    for instructions on how to relink CST.
+    tested. If you run into issues the source code is included and can
+    be recompiled.
 
 1.2 PROBLEM REPORTING INSTRUCTIONS
     Problems with this release may be reported to your local NXP
@@ -33,6 +33,34 @@ COPYRIGHT 2017-2020 NXP
     No known issues.
 
 3 Current Release Notes
+
+  Release 3.3.2:
+    ** New Features **
+        1. Added new backend to support pkcs11 interface. The backend can
+           be select using the '-b pkcs11' parameter on the command line when
+           invoking CST. CST will use the standard backend by default.
+
+        2. Updated srktool to generate 256-bit fuse configuration supporting
+           i.MX8ULP and i.MX9x devices.
+
+        3. Added support for RSA-PSS (only supported for specific devices
+           refer to SoC reference manual)
+
+        4. Release compiled with OpenSSL 1.1.1t
+           OpenSSL 3 support will be added in next release.
+
+    ** Bug Fixes **
+        1. Fixed an issue with large image encryption.
+
+        2. Fixed segmentation fault in hab_log_parser
+
+        3. Fixed Windows host ECDSA signature size issue causing invalid
+           CST to generate invalid CSF binaries for HABv4 targets.
+
+        4. Fixed build issue when using newer build tools due to weaken linking
+           option being used.
+
+4. Historical Release Notes
 
   Release 3.3.1:
     ** New Features **
@@ -62,12 +90,6 @@ COPYRIGHT 2017-2020 NXP
             parameters. A big thanks to Andrej Shadura for the debug effort and
             patches addressing the issue.
         2. Fixed issue when adding keys to PKI in Windows platform.
-
-
-4. Historical Release Notes
-    Please note that there was an issue in 3.0.1 that prevented this
-    feature from working.
-
 
   Release 3.3.0:
     ** New Features **

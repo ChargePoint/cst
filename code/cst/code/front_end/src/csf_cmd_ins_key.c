@@ -10,7 +10,7 @@
 
               Freescale Semiconductor
         (c) Freescale Semiconductor, Inc. 2011-2015. All rights reserved.
-        Copyright 2018, 2020 NXP
+        Copyright 2018, 2020, 2022 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -462,7 +462,7 @@ int32_t cmd_handler_installsrk(command_t* cmd)
     char    *key_cert;
     uint32_t srk_idx;
 
-    printf("Install SRK\n");
+    PRINT_V("Install SRK\n");
 
     /* get the arguments */
     /* srk key cert is at index 0 */
@@ -696,14 +696,14 @@ int32_t cmd_handler_installcsfk(command_t* cmd)
     uint32_t srk_idx = (g_srk_set_hab4 == SRK_SET_OEM) ? HAB_IDX_SRK : HAB_IDX_SRK1;
     uint32_t csfk_idx = (g_srk_set_hab4 == SRK_SET_OEM) ? HAB_IDX_CSFK : HAB_IDX_CSFK1;
 
-    printf("Install CSFK\n");
-
     /* The Install CSFK command is invalid when AHAB is targeted */
     if (TGT_AHAB == g_target)
     {
         log_cmd(cmd->type, STR_ILLEGAL);
         return ERROR_INVALID_COMMAND;
     }
+
+    PRINT_V("Install CSFK\n");
 
     /* get the arguments */
     /* csf key is at index 1 */
@@ -801,14 +801,14 @@ int32_t cmd_handler_installnocak(command_t* cmd)
 
     uint32_t csfk_idx = HAB_IDX_CSFK;
 
-    printf("Install no CAK\n");
-
    /* The Install NOCAK command is invalid when AHAB is targeted */
     if (TGT_AHAB == g_target)
     {
         log_cmd(cmd->type, STR_ILLEGAL);
         return ERROR_INVALID_COMMAND;
     }
+
+    PRINT_V("Install no CAK\n");
 
     g_no_ca = 1;
     /* get the arguments */
@@ -906,14 +906,14 @@ int32_t cmd_handler_installkey(command_t* cmd)
     uint8_t *cert_data = NULL;  /**< DER encoded certificate data */
     int32_t cert_len = 0;       /**< length of certificate data */
 
-    printf("Install key\n");
-
     /* The Install Key command is invalid when AHAB is targeted */
     if (TGT_AHAB == g_target)
     {
         log_cmd(cmd->type, STR_ILLEGAL);
         return ERROR_INVALID_COMMAND;
     }
+
+    PRINT_V("Install key\n");
 
     /* get the arguments */
     ret_val = process_installkey_arguments(cmd, &img_key_crt,
@@ -1064,6 +1064,8 @@ int32_t cmd_handler_installsecretkey(command_t* cmd)
     uint32_t key_identifier = 0;    /**< Holds key identifier value (default 0) */
     uint32_t images_indexes = 0xFFFFFFFF; /**< Holds indexes of image to be encrypted (default all) */
 
+    PRINT_V("Install Secret Key\n");
+
     /* get the arguments */
     if (TGT_AHAB != g_target) {
         /* This command is supported from HAB 4.1 onwards */
@@ -1212,6 +1214,8 @@ int32_t cmd_handler_installcrt(command_t* cmd)
         log_cmd(cmd->type, STR_ILLEGAL);
         return ERROR_INVALID_COMMAND;
     }
+
+    PRINT_V("Install Certificate\n");
 
     /* get the arguments */
     ret_val = process_installkey_arguments(cmd, &g_ahab_data.certificate,

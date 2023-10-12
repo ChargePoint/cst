@@ -12,7 +12,7 @@
 
                Freescale Semiconductor
           (c) Freescale Semiconductor, Inc. 2007-2016.
-          Copyright 2017-2019 NXP
+          Copyright 2017-2020 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -256,11 +256,12 @@ extern "C" {
 /** @name Signature algorithms */
 /*@{*/
 #define HAB_ALG_PKCS1    0x21   /**< PKCS#1 RSA signature algorithm  */
+#define HAB_ALG_RSA_PSS  0x22   /**< PKCS#1 RSA-PSS signature algorithm  */
 #define HAB_ALG_ECDSA    0x27   /**< NIST ECDSA signature algorithm */
 #ifdef HAB_FUTURE
 #define HAB_ALG_DSA             /**< NIST DSA signature algorithm */
 #endif
-/* Available values: 22, 24, 28, 2b, 2d, 2e
+/* Available values: 24, 28, 2b, 2d, 2e
  */
 /*@}*/
 

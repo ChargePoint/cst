@@ -11,7 +11,7 @@
 
               Freescale Semiconductor
         (c) Freescale Semiconductor, Inc. 2011-2015 All rights reserved.
-        Copyright 2018-2019 NXP
+        Copyright 2018-2019, 2022-2023 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -43,7 +43,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                             INCLUDE FILES
 =============================================================================*/
 #include <stdint.h>
-
+#include <openssl/x509.h>
 /*===========================================================================
                               CONSTANTS
 =============================================================================*/
@@ -66,6 +66,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define CAL_RAND_API_ERROR         (-10) /* Failure in RAND_bytes            */
 #define CAL_NO_CRYPTO_API_ERROR    (-11) /* Error when Encryption is disabled*/
 #define CAL_INVALID_SIGNATURE      (-12) /* Error when verifying isignature  */
+#define CAL_INSUFFICIENT_MEMORY    (-13) /* Buffer length is not sufficient  */
 #define CAL_LAST_ERROR            (-100) /* Max error codes for adapt layer  */
 
 #define FILE_BUF_SIZE             (1024) /* 1K buf for file read/file write  */
@@ -94,6 +95,7 @@ typedef enum _SIG_FMT
     SIG_FMT_CMS,        /**< CMS (PKCS#7) signature format */
     SIG_FMT_ECDSA,      /**< ECDSA signature format. R|S concatanated */
     SIG_FMT_AEAD,       /**< Proprietary AEAD MAC format */
+    SIG_FMT_RSA_PSS,    /**< RSA-PSS signature format */
 } sig_fmt_t;
 
 
@@ -152,11 +154,11 @@ extern "C" {
 char *
 get_digest_name(hash_alg_t hash_alg);
 
-/** Generate Signature Data
+/** Generate Signature Data Function Pointer
  *
- * Generates a signature for the given data file, signer certificate,
- * hash algorithm and signature format. The signature data is returned
- * in a buffer provided by caller.
+ * Hook for assiging the method that generates a signature from a backend
+ * for the given data file, signer certificate,  hash algorithm and signature
+ * format. The signature data is returned in a buffer provided by caller.
  *
  * @param[in] in_file path to file with binary data to sign
  *
@@ -181,7 +183,8 @@ get_digest_name(hash_alg_t hash_alg);
  *
  * @retval #CAL_INVALID_ARGUMENT one of the input arguments is invalid
  */
-int32_t gen_sig_data(const char* in_file,
+typedef int32_t
+(*gen_sig_data_fptr)(const char* in_file,
                      const char* cert_file,
                      hash_alg_t hash_alg,
                      sig_fmt_t sig_fmt,
@@ -189,28 +192,29 @@ int32_t gen_sig_data(const char* in_file,
                      size_t *sig_buf_bytes,
                      func_mode_t mode);
 
-/** get_der_encoded_certificate_data
+extern gen_sig_data_fptr gen_sig_data;
+
+  /** Read Certificate Function Pointer
+   *
+   * Hook for the read_certificate() method supported from the backend. Reads
+   * X.509 certificate data from the provided certificate file.
  *
- * Read X.509 certificate data from given certificate reference and encode it
- * to DER format and returns result in @derder.
+ * @param[in] reference    reference to a certificate file
  *
- * @param[in] filename    filename, function will work with both PEM and DER
- *                        input certificate files.
- *
- * @param[out] der        address to write der data
- *
- * @post if successful the contents of the certificate are written at address
- * @a der.
+ * @post if successful the contents of the certificate are extracted to X509
+ * object.
  *
  * @pre  #openssl_initialize has been called previously
  *
- * @post caller is responsible for releasing memory location returned in @a der
+ * @post caller is responsible for releasing X.509 certificate memory.
  *
- * @returns if successful function returns number of bytes written at address
- * @a der, 0 otherwise.
+ * @returns if successful function returns location of X509 object
+ *   otherwise NULL.
  */
-int32_t get_der_encoded_certificate_data(const char* reference,
-                                         uint8_t ** der);
+typedef X509*
+(*read_certificate_fptr)(const char* reference);
+
+extern read_certificate_fptr read_certificate;
 
 /** Generate authenticated encrypted data
  *

@@ -12,7 +12,7 @@
 
               Freescale Semiconductor
       (c) Freescale Semiconductor, Inc. 2011-2015. All rights reserved.
-      Copyright 2018-2020 NXP
+      Copyright 2018-2020, 2022-2023 NXP
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -59,8 +59,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <openssl/cms.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
+#include <openssl/conf.h>
+#include <openssl/ssl.h>
+#include <openssl/engine.h>
 #include "openssl_helper.h"
 #include "csf.h"
+#include "ssl_backend.h"
+#include "pkcs11_backend.h"
+
 /*===========================================================================
                                 MACROS
 =============================================================================*/
@@ -87,6 +93,10 @@ extern int32_t g_srk_set_hab4;
 
 const char *g_tool_name = "CST"; /**< Global holds tool name */
 
+/* Assign default implementation for read_certificate() and gen_sig_data() */
+read_certificate_fptr read_certificate = ssl_read_certificate;
+gen_sig_data_fptr gen_sig_data = ssl_gen_sig_data;
+
 /**
  * Points to the input CSF text file
  */
@@ -108,6 +118,11 @@ uint8_t g_csf_buffer[HAB_CSF_BYTES_MAX];
  * also gives the size of csf data (commands only)
  */
 uint32_t g_csf_buffer_index = 0;
+
+/**
+ * CST tool verbose option initialize as 0
+ */
+bool g_verbose = 0;
 
 /**
  * AHAB data
@@ -224,19 +239,21 @@ uint32_t g_skip = 0;
                   LOCAL VARIABLES
 =============================================================================*/
 /** Valid short command line option letters. */
-const char* const short_options = "lvh:lvhdso:i:c";
+const char* const short_options = "lvh:lvhdso:i:c:b:";
 
 /** Valid long command line options. */
 const struct option long_options[] =
 {
     {"license", no_argument, 0, 'l'},
     {"version", no_argument,  0, 'v'},
+    {"verbose", no_argument,  0, 'g'},
     {"help", no_argument, 0, 'h'},
     {"output", required_argument,  0, 'o'},
     {"input", required_argument,  0, 'i'},
-    {"cert", optional_argument,  0, 'c'},
+    {"cert", required_argument,  0, 'c'},
     {"dek", no_argument,  0, 'd'},
     {"skip", no_argument,  0, 's'},
+    {"backend", required_argument, 0, 'b'},
     {NULL, 0, NULL, 0}
 };
 
@@ -1458,12 +1475,16 @@ static int update_offsets_in_csf(uint8_t * buf, command_t * cmd_csf, uint32_t cs
         buf[CSF_HDR_LENGTH_OFFSET+1] = (csf_len & 0xFF);
     }
 
-    /* Set sig/cert offsets in csf_buffer */
+    /* Loop through the csf commands and set sig/cert offsets for each command except
+       the authenticate csf command. The auth csf command offset will be updated last,
+       after all commands have been updated. This will ensure the csf signature is the
+       last signature in the csf data.
+    */
     cmd = g_cmd_head;
     cert_sig_offset = csf_len;
     while(cmd != NULL)
     {
-        if (cmd->start_offset_cert_sig > 0)
+      if (cmd->start_offset_cert_sig > 0)
         {
             uint8_t offset_bytes[] = {
                 EXPAND_UINT32((uint32_t)cert_sig_offset)
@@ -1475,9 +1496,60 @@ static int update_offsets_in_csf(uint8_t * buf, command_t * cmd_csf, uint32_t cs
         cert_sig_offset += cmd->size_cert_sig;
         cmd = cmd->next;
     }
+    /* Finally, update the csf command offset */
+    uint8_t offset_bytes[] = { EXPAND_UINT32((uint32_t)cert_sig_offset) };
+    memcpy(&buf[cmd_csf->start_offset_cert_sig], offset_bytes, 4);
+
     /* done with update offsets in csf */
 
     return SUCCESS;
+}
+/** set_backend
+ *
+ * @par Purpose
+ *
+ * This function is used to reassign backend API function pointers
+ * to an alternate supported implementation.
+ *
+ * @par Operation
+ *
+ * @param[in] backend,  pointer to backend type string 
+ *
+ * @retval #SUCCESS if everything goes fine
+ */
+static int set_backend(char *backend)
+{
+  if ( !strcmp("pkcs11", backend) ) {
+    read_certificate = pkcs11_read_certificate;
+    gen_sig_data = pkcs11_gen_sig_data;
+    {
+      /* Verify OpenSSL pkcs11 engine is available */
+      openssl_initialize();
+      ENGINE *engine;
+
+      OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS |
+                          OPENSSL_INIT_ADD_ALL_DIGESTS |
+                          OPENSSL_INIT_LOAD_CONFIG,
+                          NULL);
+
+      ERR_clear_error();
+      ENGINE_load_builtin_engines();
+      engine = ENGINE_by_id("pkcs11");
+
+      if (engine == NULL) {
+        printf("engine not found:\t%s\n\n",ERR_reason_error_string(ERR_get_error()));
+        return ERROR_INVALID_ARGUMENT;
+      }
+    }
+  } else if ( !strcmp("ssl", backend) ) {
+    read_certificate = ssl_read_certificate;
+    gen_sig_data = ssl_gen_sig_data;
+  } else {
+    printf("Unsupported backend: %s\n",backend);
+    return ERROR_INVALID_ARGUMENT;
+  }
+  
+  return SUCCESS;
 }
 
 /** prints the command line usage
@@ -1502,6 +1574,13 @@ static void print_usage(void)
     printf("    Input CSF text filename\n\n");
     printf("-c, --cert <public key certificate>:\n");
     printf("    Optional, Input public key certificate to encrypt the dek\n\n");
+    printf("-b, --backend <ssl or pkcs11>:\n");
+    printf("    Optional, Select backend. SSL backend is the default and\n");
+    printf("    uses keys stored in the local host filesystem. The PKCS11\n");
+    printf("    backend supplies an interface to PKCS11 supported keystore.\n");
+    printf("-g, --verbose:\n");
+    printf("    Optional, displays verbose information.  No ");
+    printf("additional\n    arguments are required\n\n");
     printf("-l, --license:\n");
     printf("    Optional, displays program license information.  No ");
     printf("additional\n    arguments are required\n\n");
@@ -1563,6 +1642,10 @@ static void process_cmdline_args(int argc, char* argv[], char **out_bin_csf)
                 print_usage();
                 exit(0);
                 break;
+            /* Display verbose information */
+            case 'g':
+                g_verbose = 1;
+                break;
             /* Option o - output csf binary file */
             case 'o':
                 *out_bin_csf = optarg;
@@ -1583,6 +1666,12 @@ static void process_cmdline_args(int argc, char* argv[], char **out_bin_csf)
             /* Option s - skip user prompt */
             case 's':
                 g_skip = 1;
+                break;
+            case 'b':
+                if (set_backend(optarg)) {
+                  print_usage();
+                  exit(1);
+                }
                 break;
             case '?':
                 print_usage();
@@ -1641,6 +1730,9 @@ int32_t main(int32_t argc, char* argv[])
     command_t unlk_cmd;
     argument_t unlk_args[2];
     keyword_t unlk_keywords[2];
+
+    /* Set the backend function pointers to the openssl host backend */
+    set_backend("ssl");
 
     memset(g_csf_buffer, 0, HAB_CSF_BYTES_MAX);
 
@@ -1735,9 +1827,7 @@ int32_t main(int32_t argc, char* argv[])
             return handle_ahab_signature();
         }
 
-        /* Parsing completed successfully, generate signature data for csf
-            and replace the dummy one with it
-        */
+        /* Parsing completed successfully, generate the csf signature */
         do {
             uint32_t csfk_idx = (g_srk_set_hab4 == SRK_SET_OEM) ? HAB_IDX_CSFK : HAB_IDX_CSFK1;
 
@@ -1819,7 +1909,7 @@ int32_t main(int32_t argc, char* argv[])
                 cmd = g_cmd_head;
                 while(cmd != NULL)
                 {
-                    if (cmd->cert_sig_data == NULL)
+                    if (cmd->cert_sig_data == NULL || cmd == cmd_csf)
                     {
                         cmd = cmd->next;
                         continue;
@@ -1833,6 +1923,15 @@ int32_t main(int32_t argc, char* argv[])
                         break;
                     }
                     cmd = cmd->next;
+                }
+                if (ret_val == SUCCESS)
+                {
+                  if (fwrite(cmd_csf->cert_sig_data, 1, cmd_csf->size_cert_sig, fo) !=
+                      cmd_csf->size_cert_sig)
+                    {
+                      log_error_msg(out_bin_csf);
+                      ret_val = ERROR_WRITING_FILE;
+                    }
                 }
             }
             /* Reached here means everything work good and csf data generated
