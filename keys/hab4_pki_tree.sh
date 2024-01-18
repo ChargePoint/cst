@@ -39,7 +39,7 @@
 #              including HAB support this option.
 #
 #        (c) Freescale Semiconductor, Inc. 2011, 2013. All rights reserved.
-#        Copyright 2018, 2022 NXP
+#        Copyright 2018-2022 NXP
 #
 #
 #-----------------------------------------------------------------------------

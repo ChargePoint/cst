@@ -1,7 +1,7 @@
-                CST 3.3.2 Release Notes
+                CST 3.4.0 Release Notes
 
 PROJECT(S): CST
-DATE: April, 2023
+DATE: December, 2023
 
 COPYRIGHT 2017-2023 NXP
 
@@ -15,10 +15,12 @@ COPYRIGHT 2017-2023 NXP
     for the code signing for SoC supporting HAB version 4 and AHAB.
 
 1.1 REQUIREMENTS
-    This release supports Linux, MacOS, and Windows hosts.
+    This release supports Linux and Windows hosts.
     For Linux, the CST is known to work on Ubuntu 18.04 and later.
     For Windows, the CST is known to work on Windows 7 and later.
-    For MacOS, the CST is known to work on Monterey and later.
+    For MacOS, the CST is no longer released with supported binaries,
+    but the build system support for the MacOS target is retained in
+    the source code.
 
     Most Linux distributions should work but they have not been fully
     tested. If you run into issues the source code is included and can
@@ -30,9 +32,58 @@ COPYRIGHT 2017-2023 NXP
 
 2 KNOWN ISSUES
 
-    No known issues.
+    1. Encrypted boot failure using CST 3.3.2: Following the prescribed
+    procedure for encrypting and signing a bootloader image for i.MX8M
+    family devices using CST 3.3.2, the resulting image does not work.
+    This problem is attributed to an incorrect MAC/Nonce calculation offset,
+    resulting from a prior bug fix affecting ECDSA signature size on Windows
+    hosts. To address this misalignment issue, a solution involves iteratively
+    determining the position of the HAB_TAG_MAC tag in the binary CSFs.
+
+    2. CST requires administrative privileges on Windows hosts: Please note that
+    when compiling CST using MSYS2/MinGW for Windows hosts, and depending on the
+    version, the resulting executable may require elevation to run properly.
+    This requirement arises because temporary files, created using the tmpfile()
+    function, might be written to the root directory, necessitating
+    administrative privileges. To avoid this potential issue, it is recommended
+    to cross-compile CST for Windows on Linux instead with MinGW.
 
 3 Current Release Notes
+
+  Release 3.4.0:
+    ** New Features **
+        1. OpenSSL 3 Support:
+           - Transitioned to OpenSSL 3, following OpenSSL 1.1.1 End Of Life in
+             Sept 2023. No more public security fixes for 1.1.1 post that date.
+           - Compiled with OpenSSL 3.2.0 for enhanced security and features.
+
+        2. PKCS#11 Backend:
+           - Simplified the PKCS#11 backend, eliminating redundant code.
+           - Introduced Dockerfile.hsm for experimenting with the PKCS#11
+             backend.
+           - PKCS#11 generation scripts now located in the 'keys' folder.
+           - Removed repetitive PIN requests in PKI generation scripts.
+           - The backend now supports RSA PSS.
+
+        3. Enhanced Makefile and Build System:
+           - Improved build system for efficiency and ease of use.
+           - Updated Dockerfile; relocated to top folder alongside Makefile for
+             easier access and build management.
+
+        4. Platform Support:
+           - Added support for 32-bit Linux in the hab_log_parser tool.
+           - Removed OSX binaries; however, the build system and sources still
+             support it.
+
+        5. Documentation:
+           - Added BUILD.md with instructions for CST building using Docker.
+           - Code-Signing Tool User's Guide updated with instructions on using
+             the PKCS#11 backend and notes about i.MX9x devices.
+
+    ** Bug Fixes **
+        -NONE-
+
+4. Historical Release Notes
 
   Release 3.3.2:
     ** New Features **
@@ -60,7 +111,6 @@ COPYRIGHT 2017-2023 NXP
         4. Fixed build issue when using newer build tools due to weaken linking
            option being used.
 
-4. Historical Release Notes
 
   Release 3.3.1:
     ** New Features **
@@ -90,6 +140,7 @@ COPYRIGHT 2017-2023 NXP
             parameters. A big thanks to Andrej Shadura for the debug effort and
             patches addressing the issue.
         2. Fixed issue when adding keys to PKI in Windows platform.
+
 
   Release 3.3.0:
     ** New Features **

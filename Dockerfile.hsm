@@ -1,0 +1,117 @@
+# Docker image to provide sample HSM to test CST pkcs11/HSM backend
+#
+# Copyright 2022-2023 NXP
+
+FROM ubuntu:20.04
+
+# Set noninteractive installation
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Setup a work environment
+ENV WORK_DIR /opt/cst
+
+# Allow using a http proxy. It should be passed to docker build command using, eg:
+# --build-arg http_proxy=$bamboo_capability_agent_http_proxy
+ARG http_proxy
+ENV http_proxy=$http_proxy
+
+RUN apt-get update && apt-get -y upgrade && apt-get install -y \
+    locales
+
+# Perform some locale bookkeeping
+RUN locale-gen en_US.UTF-8
+ENV LC_ALL en_US.UTF-8
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US.UTF-8
+ENV TZ=Universal
+
+# Use bash
+RUN rm /bin/sh && ln -s bash /bin/sh
+
+# Configure host user in docker container (use your host user uid/gid to keep permissions in sync)
+ARG hostUID=1000
+ARG hostGID=1000
+ARG hostUserName=cst
+
+# Packages versions
+ARG OPENSSL_VERSION=3.2.0
+ARG LIBP11_VERSION=0.4.12
+
+# Set the token directory
+ARG TOKEN_DIR="$WORK_DIR/softhsm2/tokens/"
+
+RUN groupadd -f -g $hostGID $hostUserName
+RUN useradd -g $hostGID -m -s /bin/bash -u $hostUID $hostUserName
+
+# Make docker prompt obvious
+RUN echo 'export PS1="[\@] \[\e[01;33m\]\u@docker:\[\e[01;31m\]\W\[\e[00m\]\$ "' >> /home/$hostUserName/.bashrc && \
+    date > /opt/image-creation-date.txt
+
+# Install CST requisites
+RUN apt-get update && apt-get -y upgrade && apt-get install -y \
+    gcc                      \
+    make                     \
+    git                      \
+    curl                     \
+    file                     \
+    pkg-config               \
+    openssl                  \
+    libengine-pkcs11-openssl \
+    softhsm2                 \
+    libsofthsm2-dev          \
+    opensc                   \
+    p11-kit
+
+# Change the priority of PKCS#11 to be set to SoftHSM
+RUN echo "priority: 10" >> /usr/share/p11-kit/modules/softhsm2.module
+
+# Set the p11-kit proxy as PKCS11 library.
+ENV PKCS11_MODULE_PATH /usr/lib/x86_64-linux-gnu/p11-kit-proxy.so
+
+# Define Token login parameters
+ENV SO_PIN 654321
+ENV USR_PIN 123456
+
+# Add dockeruser in softhsm group
+RUN usermod -aG softhsm $hostUserName
+
+# Create SoftHSM configuration folder
+RUN mkdir -p /home/$hostUserName/.config/softhsm2
+
+# Create softhsm user configuration
+RUN mkdir -p $TOKEN_DIR
+# Configure the token directory.
+RUN echo "directories.tokendir = $TOKEN_DIR" >> /home/$hostUserName/.config/softhsm2/softhsm2.conf
+# Configure a file-based backend.
+RUN echo "objectstore.backend = file" >> /home/$hostUserName/.config/softhsm2/softhsm2.conf
+RUN chown -R $hostUserName:$hostUserName /home/$hostUserName/.config
+
+# Switch to user profile
+RUN chown -R $hostUserName:$hostUserName $WORK_DIR
+USER $hostUserName
+
+# Download openssl release and decompress in the working directory
+WORKDIR /tmp
+RUN curl -L https://www.openssl.org/source/openssl-$OPENSSL_VERSION.tar.gz -o openssl-$OPENSSL_VERSION.tar.gz
+RUN tar xzf openssl-$OPENSSL_VERSION.tar.gz
+
+# Compile libssl and libcrypto libraries
+WORKDIR /tmp/openssl-$OPENSSL_VERSION
+RUN ./Configure no-apps no-tests no-threads no-shared no-idea --prefix="/opt/cst" --openssldir="/opt/cst"
+RUN make && make install_sw
+
+# Fetch pkcs11 engine sources
+WORKDIR /tmp
+RUN curl -L https://github.com/OpenSC/libp11/releases/download/libp11-$LIBP11_VERSION/libp11-$LIBP11_VERSION.tar.gz -o libp11-$LIBP11_VERSION.tar.gz
+RUN tar xzf libp11-$LIBP11_VERSION.tar.gz
+
+# Build and install pkcs11 engine
+WORKDIR /tmp/libp11-$LIBP11_VERSION
+RUN export PKG_CONFIG_PATH=$(dirname $(find  $WORK_DIR/lib* -name 'openssl.pc' 2>/dev/null) 2>/dev/null) && \
+        ./configure \
+        --enable-api-doc=no \
+        --prefix=/opt/cst
+RUN make clean && make && make install
+
+# Done
+WORKDIR /home/$hostUserName/cst/

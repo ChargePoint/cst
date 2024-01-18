@@ -1,1 +1,0 @@
-Please refer to the Application Note AN12812 for assistance on building and using Code-Signing Tool (CST) with a Hardware Security Module (HSM) backend to perform code signing for HAB and AHAB.

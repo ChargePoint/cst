@@ -38,7 +38,7 @@
 ::              and not other keys.  Note that not all NXP processors
 ::              including AHAB support this option.
 ::
-::        Copyright 2018-2019, 2022 NXP
+::        Copyright 2018-2023 NXP
 ::
 ::-----------------------------------------------------------------------------
 

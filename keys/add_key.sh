@@ -11,7 +11,7 @@
 #              This script is not intended for generating CA root keys.
 #
 #            (c) Freescale Semiconductor, Inc. 2011. All rights reserved.
-#            Copyright 2018-2019, 2022 NXP
+#            Copyright 2018-2022 NXP
 #
 #
 #-----------------------------------------------------------------------------
