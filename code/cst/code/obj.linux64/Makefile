@@ -19,8 +19,8 @@ TOOLCHAIN := gcc
 
 # Configuration-specific customization
 
-COPTIONS += -m64
-LDOPTIONS += -m64
+COPTIONS += -march=native
+LDOPTIONS +=
 
 include ../build/make/binaries.mk
 

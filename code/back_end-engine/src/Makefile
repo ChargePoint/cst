@@ -25,10 +25,6 @@ SRC := backend.c openssl_helper.c
 DEP = -lssl -lcrypto -ldl -lpthread
 
 BITNESS := $(shell getconf LONG_BIT)
-CFLAGS_32 := -m32
-CFLAGS_64 := -m64
-LDFLAGS_32 := -m32
-LDFLAGS_64 := -m64
 
 CC := gcc
 CFLAGS := $(CFLAGS_$(BITNESS)) -g -Wall -Werror -Winline -Wl,--export-all-symbols -Iinclude
