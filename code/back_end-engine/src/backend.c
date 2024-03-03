@@ -502,20 +502,22 @@ EVP_PKEY *read_private_key_pem(const char* cert_path)
     pkey = EVP_PKEY_new();
     if (pkey == NULL) {
         fprintf(stderr, "ENV_PKEY_NEW failed");
+        RSA_free(rsa);
         goto out_file;
     }
     r = EVP_PKEY_assign_RSA(pkey, rsa);
     if (r != 1) {
         fprintf(stderr, "EVP_PKEY_assign_RSA failed");
+        EVP_PKEY_free(pkey);
+        RSA_free(rsa);
         goto out_file;
     }
 
     pkey_ret = pkey;
-
 out_file:
     fclose(f);
 out:
-	return pkey_ret;
+    return pkey_ret;
 }
 
 
@@ -746,8 +748,6 @@ gen_sig_data_raw (const char *in_file, EVP_PKEY * key,
 
     do {
         rsa = EVP_PKEY_get1_RSA (key);
-        EVP_PKEY_free (key);
-
         if (!rsa) {
             fprintf (stderr,
             "Unable to extract RSA key for RAW PKCS#1 signature");
